@@ -7,6 +7,10 @@ import { requireStaff } from "@/modules/auth/session";
 /** Menu items appear only when the user has the permission; proxy.ts and the pages check again. */
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/collections", label: "Collections" },
+  { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/system", label: "Jobs & system" },

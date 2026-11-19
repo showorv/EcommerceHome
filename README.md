@@ -85,10 +85,10 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 ### Phase 1 — Catalogue + storefront (3–4 weeks)
 
-- [ ] 1.1 Categories and collections (manual + rule-based) — admin CRUD (FR-AD-03)
-- [ ] 1.2 Products + variants: CRUD, duplicate, archive, per-variant price/stock/SKU/weight/images, SEO fields (FR-AD-02, FR-PD-02, FR-PD-08)
-- [ ] 1.3 Product media: multiple images + videos, focal point, alt text, hover image choice
-- [ ] 1.4 Inventory: stock per variant, low-stock threshold, movement history, purchase batches with landed cost (FR-AD-04)
+- [x] 1.1 Categories and collections (manual + rule-based) — admin CRUD (FR-AD-03)
+- [x] 1.2 Products + variants: CRUD, duplicate, archive, per-variant price/stock/SKU/weight/images, SEO fields (FR-AD-02, FR-PD-02, FR-PD-08)
+- [x] 1.3 Product media: multiple images + videos, focal point, alt text, hover image choice — _admin side done; storefront display comes with 1.5/1.7_
+- [x] 1.4 Inventory: stock per variant, low-stock threshold, movement history, purchase batches with landed cost (FR-AD-04)
 - [ ] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07)
 - [ ] 1.6 Quick-view modal with shareable URL (FR-PC-04)
 - [ ] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05)
@@ -284,6 +284,32 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1 — admin catalogue built (steps 1.1–1.4)
+
+- **Categories** (`/admin/categories`): tree with parents, English + Bangla names, auto slug, image, SEO fields,
+  show/hide. Deleting one moves its sub-categories up a level and takes it off its products.
+- **Collections** (`/admin/collections`): either hand-picked products, or rules (price, tag, label, category,
+  stock, on sale…) that keep the list up to date by themselves.
+- **Products** (`/admin/products`): search + filters, create / edit / duplicate / archive / delete. Variants built
+  from options (e.g. Colour × Size) with their own SKU, price, compare-at price, weight, stock, images. Rich
+  description blocks, specs, labels, tags, SEO. A product cannot go Active without an image; unsaved-changes warning.
+- **Media**: drag-and-drop images and videos, YouTube links, reorder, alt text, focal point, hover image, autoplay.
+  Without Cloudinary keys, uploads go to `public/uploads/` on your computer (dev only, not committed; switched off
+  in production). With keys, they go straight to Cloudinary.
+- **Inventory** (`/admin/inventory`): stock per variant, low-stock filter, adjust with a reason (blocked if stock
+  would go below 0), full history, and **purchase batches**: shipping/customs/other costs are spread over the goods
+  by value, and each variant's average cost is updated.
+- **Who sees what:** cost prices, landed cost and purchase batches are visible to **managers and owners only**.
+  Staff can view products and stock but not costs, and get a real 403 on "new product" / "new collection".
+- Every change is in the audit log; storefront cache tags are refreshed on save (ready for 1.15).
+- Checked on a production build: product with 2 variants and opening stock; batch PB-2026-0001 landed costs match a
+  hand calculation (Red ৳834.78, Blue ৳746.89); over-removal refused; rule collection counts correctly; staff role
+  sees no edit buttons, no cost data, 403 on create pages. `pnpm lint`, typecheck and 50 tests pass.
+- **You need to:** restart `pnpm dev` (Ctrl+C, then `pnpm dev`) — your running dev server still has old code and
+  will 404 the new admin pages until restarted. Add Cloudinary keys when you can so uploads go to the cloud.
+
+**Next:** Phase 1.5 — storefront product card.
 
 ### 2026-11-20 · Change: admin two-factor authentication removed
 
