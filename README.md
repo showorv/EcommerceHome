@@ -37,23 +37,26 @@ Rules we keep from day one (from the SRS, cheaper to do now than to retrofit):
 
 ---
 
-## Planned folder layout
+## Folder layout
 
 ```
 EcommerceHome/
 ├─ app/
-│  ├─ (store)/          # public storefront (static/ISR pages)
-│  ├─ admin/            # admin panel (dynamic, authenticated, 2FA)
-│  └─ api/              # route handlers: webhooks, invoice link, auth callbacks
+│  ├─ (store)/          # public storefront (static/ISR pages): home, account, sign-in/up
+│  ├─ admin/            # admin panel (rendered per request): sign-in, set-password, (panel)/…
+│  └─ api/              # route handlers: auth, media signing, health (later: webhooks, invoice link)
 ├─ modules/             # business logic, no UI
-│  ├─ auth/  catalog/  inventory/  orders/  cms/
-│  ├─ notifications/  shipping/  audit/  settings/
-├─ components/          # shared UI (shadcn/ui, motion primitives, product card…)
-├─ lib/                 # db, redis, env, utils
-├─ worker/              # BullMQ worker: SMS, email, PDF, courier, image jobs, cron
-├─ tests/               # Vitest + Playwright
-├─ docker-compose.yml   # local MongoDB, Redis, Mailpit
-└─ docs/                # SRS and decisions
+│  ├─ auth/             # Better Auth config, RBAC, session guards, lockout, admin route map
+│  ├─ audit/  staff/  media/  notifications/  system/  shared/ (counters, soft delete)
+│  └─ (later) catalog/  inventory/  orders/  cms/  shipping/  settings/
+├─ components/          # ui/ (shadcn), motion/ (Reveal, Lift…), auth/, admin/
+├─ lib/                 # env, db, redis, queue, logger, money, phone, crypto, rate limit, CSP
+├─ proxy.ts             # admin gate (session, role, permission → 403) + nonce CSP
+├─ worker/              # BullMQ worker process (`pnpm worker`)
+├─ scripts/             # create-owner
+├─ tests/               # Vitest unit tests (Playwright end-to-end later)
+├─ docker-compose.yml   # local MongoDB (port 27018), Redis, Mailpit
+└─ docs/                # SRS
 ```
 
 ---
@@ -64,20 +67,21 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 ### Phase 0 — Foundation (2–3 weeks)
 
-- [ ] 0.1 Initialise repo: git, Next.js (App Router) + TypeScript strict, pnpm, ESLint, Prettier, folder layout above
-- [ ] 0.2 Local environment: `docker-compose.yml` with MongoDB (replica set, needed for transactions), Redis, Mailpit; `.env.example`; typed env loader
-- [ ] 0.3 CI: GitHub Actions running lint, typecheck, tests, build; dependency scan (NFR-SEC-17)
-- [ ] 0.4 Design system: Tailwind + shadcn/ui, theme tokens as CSS variables (FR-SF-03), fonts incl. Bangla, motion primitives with reduce-motion support (FR-SF-04/05)
-- [ ] 0.5 Database layer: Mongoose connection, base schema conventions (timestamps, soft delete, poisha money), `counters` collection for atomic numbers
-- [ ] 0.6 Auth for customers: Google OAuth + email/phone + password (Argon2id), account linking, sessions in HttpOnly cookies (FR-AC-01…05, NFR-SEC-01…03)
-- [ ] 0.7 Admin auth: separate `/admin`, staff invite, TOTP 2FA required, session list + forced sign-out (FR-AD-09, NFR-SEC-04)
-- [ ] 0.8 RBAC: roles (Staff / Manager / Owner) with granular permissions like `orders.confirm`, server-side guards (NFR-SEC-07)
-- [ ] 0.9 Audit log: append-only `auditLogs` with before/after, IP, user agent (FR-AD-10, NFR-SEC-16)
-- [ ] 0.10 Security baseline: headers + CSP, rate limiting with Redis, CSRF, Zod everywhere (NFR-SEC-05, 09, 11, 12)
-- [ ] 0.11 Media upload pipeline: Cloudinary (or R2) direct upload via signed URLs, type/size checks (NFR-SEC-15)
-- [ ] 0.12 Worker process skeleton: BullMQ queues, retries with back-off, dead-letter list (NFR-SC-05)
+- [x] 0.1 Initialise repo: git, Next.js 16.4 (App Router) + TypeScript strict, pnpm, ESLint, Prettier, folder layout below
+- [x] 0.2 Local environment: `docker-compose.yml` with MongoDB 8 (single-node replica set for transactions), Redis 7, Mailpit; `.env.example`; typed env loader (`lib/env.ts`)
+- [x] 0.3 CI: GitHub Actions running lint, typecheck, tests, build; `pnpm audit` for critical vulnerabilities; Dependabot (NFR-SEC-17) — _runs on first push_
+- [x] 0.4 Design system: Tailwind 4 + shadcn/ui (Radix), theme tokens as CSS variables (FR-SF-03), Plus Jakarta Sans + Hind Siliguri (Bangla), motion primitives `Reveal` / `Stagger` / `Lift` with admin motion level + OS reduce-motion (FR-SF-04/05)
+- [x] 0.5 Database layer: Mongoose + native driver connections, poisha money helpers, soft-delete plugin, `counters` collection with atomic `nextSequence()` (checked: 50 parallel calls → 50 unique numbers)
+- [x] 0.6 Auth for customers: Google OAuth (needs keys), email + password and phone + password sign-in, Argon2id, breached-password check (production), account linking, email verification, phone OTP, HttpOnly cookies (FR-AC-01…05, NFR-SEC-01…03) — _phone-only sign-up moves to Phase 2 with real SMS_
+- [x] 0.7 Admin auth: separate `/admin`, staff invite by email, email + password sign-in with lockout, session count + "sign out all" per staff member (FR-AD-09) — _2FA removed on 2026-11-20 at your request (SRS NFR-SEC-04 not applied); can be added back later_
+- [x] 0.8 RBAC: Staff / Manager / Owner with granular permissions (`orders.confirm`, `staff.manage`…), checked in `proxy.ts` (real HTTP 403), in every page, server action and route handler (NFR-SEC-07)
+- [x] 0.9 Audit log: append-only `auditLogs` (updates/deletes throw), before/after, IP, user agent, secrets scrubbed; viewer at `/admin/audit` (FR-AD-10, NFR-SEC-16)
+- [x] 0.10 Security baseline: CSP (strict nonce CSP on admin, locked-down CSP on storefront), HSTS on HTTPS, nosniff, frame-deny, Permissions-Policy; Redis rate limits; 5-fail / 15-min account lockout; CSRF via origin checks + SameSite cookies; Zod validation; Mongo filter sanitising (NFR-SEC-05, 09, 11, 12)
+- [x] 0.11 Media upload pipeline: signed direct-to-Cloudinary uploads (`/api/media/sign`), type/size limits, magic-byte sniffing helper (NFR-SEC-15) — _needs Cloudinary keys to try for real_
+- [x] 0.12 Worker: BullMQ `notifications` queue (SMS + email), 5 retries with exponential back-off, failed jobs kept and retryable from `/admin/system` (NFR-SC-05)
 
-**Done when:** a staff user can sign in with 2FA, sees only what their role allows, every action shows in the audit log, and CI is green.
+**Done when:** a staff user can sign in, sees only what their role allows, every action shows in the audit log, and CI is green.
+✅ Verified locally on 2026-11-19 (see Progress log). CI goes green on the first push to GitHub.
 
 ### Phase 1 — Catalogue + storefront (3–4 weeks)
 
@@ -153,18 +157,20 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 ## What the owners need to provide (and when)
 
 ### Before Phase 0 starts
-- [ ] **Store name** (needed for the repo, theme and later the domain)
-- [ ] **GitHub account / repository** where the code will live (private repo recommended)
+
+- [ ] **Store name** (needed for the repo, theme and later the domain) — placeholder "China Import Store" is used via `STORE_NAME` until then
+- [x] **GitHub account / repository** — `showorv/EcommerceHome` (make sure it is private)
 - [ ] Confirm or change the SRS defaults in [Open decisions](#open-decisions) below
 - [x] Node.js, pnpm, Docker, Git installed on this Mac (already present)
 
 ### During Phase 0
-- [ ] **Google Cloud** project + OAuth client (Web) for sign-in — I will give the exact redirect URIs
-- [ ] **Cloudinary** account (free tier) for images/videos
+
+- [ ] **Google Cloud** project + OAuth client (Web) for sign-in. Authorised JavaScript origin `http://localhost:3000`, redirect URI `http://localhost:3000/api/auth/callback/google` (add the real domain later). Put the ID/secret in `.env.local` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. The "Continue with Google" button appears automatically once they are set.
+- [ ] **Cloudinary** account (free tier) for images/videos — put `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in `.env.local`
 - [ ] **MongoDB Atlas** account (free cluster for staging; Singapore or Mumbai region) — local Docker is used for development
-- [ ] An authenticator app (Google Authenticator / Authy) for admin 2FA
 
 ### Start early — these take time (needed before Phase 2)
+
 - [ ] **Domain name** bought, DNS on **Cloudflare**
 - [ ] **SMS provider** account with a BTRC-listed aggregator (compare 2–3) + **masking sender ID registration** (slow — start now)
 - [ ] **bKash Personal Retail Account** and/or **Nagad** receiving numbers + their QR images
@@ -173,6 +179,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [ ] Delivery charges per zone that match your courier contract
 
 ### Content (needed for Phase 1–3)
+
 - [ ] Logo, favicon, brand colours (or let us pick)
 - [ ] Product data: names, descriptions, photos, short videos, prices, compare-at prices, weights, landed cost, stock per variant
 - [ ] Category list
@@ -180,6 +187,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [ ] SMS/email wording if you want something different from the defaults
 
 ### Before launch (Phase 3)
+
 - [ ] **VPS** (DigitalOcean/Hetzner, Singapore) or Vercel account
 - [ ] **Sentry** account, uptime monitor (e.g. UptimeRobot)
 - [ ] Meta Pixel ID + Conversions API token, GA4 ID, TikTok Pixel (if used)
@@ -192,24 +200,84 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 SRS §10 defaults are used until you say otherwise.
 
-| # | Question | Default being used |
-|---|----------|--------------------|
-| 1 | Store name, domain, SMS sender ID | **Needed from you** |
-| 2 | Advance for all outside-Dhaka orders, or only risky ones? | Risk-based: new customers outside Dhaka + orders above ৳3,000 |
-| 3 | Receiving account | bKash PRA + Nagad, both with QR at checkout |
-| 4 | Courier at launch | Steadfast; Pathao in Phase 4 |
-| 5 | Hosting | One VPS with Docker behind Cloudflare |
-| 6 | Media | Cloudinary free tier |
-| 7 | Bangla UI at launch? | English UI, Bangla product names/descriptions; full Bangla in Phase 4 |
-| 8 | Return policy | 3-day change of mind for unused items, customer pays return delivery; defects replaced free |
-| 9 | Orders from Facebook/WhatsApp chats? | Yes, admin manual-order form |
-| 10 | VAT/BIN on invoices? | Not at launch; optional BIN field |
+| #   | Question                                                  | Default being used                                                                          |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | Store name, domain, SMS sender ID                         | **Needed from you**                                                                         |
+| 2   | Advance for all outside-Dhaka orders, or only risky ones? | Risk-based: new customers outside Dhaka + orders above ৳3,000                               |
+| 3   | Receiving account                                         | bKash PRA + Nagad, both with QR at checkout                                                 |
+| 4   | Courier at launch                                         | Steadfast; Pathao in Phase 4                                                                |
+| 5   | Hosting                                                   | One VPS with Docker behind Cloudflare                                                       |
+| 6   | Media                                                     | Cloudinary free tier                                                                        |
+| 7   | Bangla UI at launch?                                      | English UI, Bangla product names/descriptions; full Bangla in Phase 4                       |
+| 8   | Return policy                                             | 3-day change of mind for unused items, customer pays return delivery; defects replaced free |
+| 9   | Orders from Facebook/WhatsApp chats?                      | Yes, admin manual-order form                                                                |
+| 10  | VAT/BIN on invoices?                                      | Not at launch; optional BIN field                                                           |
 
 ---
 
 ## Running locally
 
-_Filled in during step 0.1–0.2._
+Needs Node 24+, pnpm and Docker Desktop (running).
+
+```bash
+pnpm install
+cp .env.example .env.local      # then fill BETTER_AUTH_SECRET and ENCRYPTION_KEY:
+openssl rand -base64 48         # → BETTER_AUTH_SECRET
+openssl rand -base64 32         # → ENCRYPTION_KEY
+pnpm services:up                # MongoDB (localhost:27018), Redis, Mailpit
+```
+
+Then, in two terminals:
+
+```bash
+pnpm dev        # web app → http://localhost:3000
+pnpm worker     # background jobs (emails, SMS). Dev SMS + OTP codes are printed here.
+```
+
+Create the first owner account (once):
+
+```bash
+pnpm owner:create --email you@example.com --name "Your Name"
+```
+
+`--name` can be left out (`pnpm owner:create --email you@example.com Your Name` works too). Keep `pnpm worker`
+running so the email is sent. Open it in Mailpit (http://localhost:8025), set a password, sign in at
+http://localhost:3000/admin with your email and password.
+
+| Command                     | What it does                                            |
+| --------------------------- | ------------------------------------------------------- |
+| `pnpm check`                | lint + typecheck + unit tests (run before every commit) |
+| `pnpm build` / `pnpm start` | production build / run it                               |
+| `pnpm format`               | Prettier                                                |
+| `pnpm services:down`        | stop Docker services (data is kept in volumes)          |
+
+> MongoDB runs on host port **27018**, not 27017, because a Homebrew MongoDB is already using 27017 on this Mac.
+
+### Email: local vs real
+
+- **Locally, no email leaves your computer.** `SMTP_HOST=localhost` / `SMTP_PORT=1025` point at Mailpit, which
+  catches every email (invites, password resets, verification). Read them at http://localhost:8025, even ones
+  addressed to a real Gmail.
+- **To send real email**, only `.env.local` (or the server's env) changes; the code stays the same. Example with Resend:
+
+  ```bash
+  SMTP_HOST=smtp.resend.com
+  SMTP_PORT=465            # 465 = TLS on connect
+  SMTP_USER=resend
+  SMTP_PASS=re_xxx         # your Resend API key
+  EMAIL_FROM="China Import Store <no-reply@yourdomain.com>"
+  ```
+
+  Then verify `yourdomain.com` in the provider (add the SPF, DKIM and DMARC DNS records it shows you), or emails
+  land in spam or get rejected. Restart `pnpm worker` after changing these; the worker is the process that sends.
+  Brevo or Amazon SES work the same way with their own host, user and password.
+
+### Security notes for later phases
+
+- **Production database user:** give the app's MongoDB user `insert` + `find` only on `auditLogs` (no update/delete), so the audit log stays append-only even if the app is compromised.
+- **Storefront CSP** allows inline scripts because static/ISR pages can't carry a per-request nonce (Next.js limitation). The admin area, which handles sensitive data, uses a strict nonce + `strict-dynamic` policy. Revisit Next's experimental SRI (hash-based CSP) in Phase 3.
+- **Dev SMS** (`SMS_PROVIDER=console`) prints full messages, including OTP codes, to the worker log. Production must use a real provider.
+- Set `CLIENT_IP_HEADER=cf-connecting-ip` behind Cloudflare so rate limits use the real visitor IP.
 
 ---
 
@@ -217,7 +285,92 @@ _Filled in during step 0.1–0.2._
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-20 · Change: admin two-factor authentication removed
+
+- At your request, admin sign-in is now **email + password only**. No QR code, no authenticator app, no 6-digit code.
+- Removed: Better Auth `twoFactor` plugin (server + client), the `/admin/setup-2fa` page, the 2FA step in the admin
+  sign-in form, the "2FA on" checks in `proxy.ts` and `modules/auth/session.ts`, the 2FA column in Staff & roles,
+  and the `qrcode` package.
+- Still protecting the admin: 5 wrong passwords → account locked 15 min, per-IP rate limits, Argon2id passwords,
+  role permissions with real 403s, block / "sign out everywhere", audit log of every sign-in.
+- **Trade-off:** this goes against SRS NFR-SEC-04 ("2FA required for every staff account"). If a staff password
+  leaks, that alone is enough to get in. Use long unique passwords for staff. 2FA can be switched back on later
+  (e.g. in Phase 3 hardening) without data changes.
+- Old `twoFactor` records in the database are now unused and harmless.
+- Checked: production build; staff account (which had 2FA on) signs in with password only → dashboard 200;
+  `/admin/setup-2fa` → 404; permission 403s unchanged; `pnpm check` passes.
+- **You need to:** restart `pnpm dev` (Ctrl+C, then `pnpm dev`). The running dev server kept the old dashboard code
+  in memory and still sends you to the removed setup page until restarted.
+
+### 2026-11-20 · Fix: 2FA QR code not scanning
+
+- The QR on `/admin/setup-2fa` had a 1-module white border on a dark page. Phone scanners need about 4, so
+  authenticator apps often didn't pick it up. It now has a full white border.
+- Added step-by-step instructions and a **"Can't scan? Enter a setup key instead"** section that shows the key
+  (with a Copy button) for typing into the authenticator app by hand.
+- Checked: QR shows with the wide border; a code made from the setup key turned 2FA on and showed the backup
+  codes; `pnpm check` passes.
+- Note: the dev test account `staff@example.test` was still blocked from the Phase 0 "block staff" test; it is
+  unblocked again.
+
+### 2026-11-20 · Fix: admin set-password / sign-in pages showing a dev error
+
+- `/admin/set-password` read the URL (`?token=`) without telling Next.js that the page must render at request
+  time. In dev, Next.js flagged it ("URL data accessed outside `<Suspense>`") and rendered the page an extra time
+  for its check, while the first visit was also compiling the route.
+- Added `export const instant = false` to `/admin/set-password`, `/admin/sign-in` and `/admin/setup-2fa`. These
+  pages read the URL or session on every request, so blocking is correct for them.
+- Checked: page loads once with no dev error or issue badge; reload does not repeat; `pnpm check` passes (33 tests).
+- Added the "Email: local vs real" notes under Running locally.
+
+### 2026-11-19 · Fix: `pnpm owner:create` without `--name`
+
+- Running `pnpm owner:create --email … showrov` crashed because the name was passed without `--name`.
+- The script now accepts the name either way, and prints which value is missing or invalid instead of only the usage line.
+- Checked: no arguments → both problems listed; bad email → email error; `--email owner@example.test Test Owner` → works.
+
+### 2026-11-19 · Phase 0 — Foundation built (branch `phase-0-foundation`)
+
+**Done**
+
+- Next.js 16.4 + TypeScript strict + Tailwind 4 + shadcn/ui (Radix) scaffolded; pnpm scripts, Prettier, ESLint, Vitest.
+- Docker Compose: MongoDB 8 replica set (port 27018), Redis 7, Mailpit. Typed, validated env (`lib/env.ts`).
+- Auth with **Better Auth 1.7** (MongoDB adapter, Redis secondary storage): email/phone + password (Argon2id), Google OAuth (switches on when keys exist), email verification, phone OTP, TOTP 2FA with backup codes, account linking for verified Google emails.
+- Staff/admin: `/admin` sign-in → forced 2FA setup → dashboard. Owner can invite staff by email, change roles, block/unblock, and sign someone out of every device. `pnpm owner:create` bootstraps the first owner.
+- RBAC (`modules/auth/rbac.ts`): Staff / Manager / Owner, 23 granular permissions. Checked in `proxy.ts` (real HTTP 403), in pages (`requireStaff`), and in server actions / route handlers (`checkStaff`).
+- Append-only audit log + viewer; sign-ins, invites, role changes, blocks, lockouts and job retries are recorded.
+- Security: strict nonce CSP on admin, locked-down CSP on storefront, security headers, HSTS on HTTPS, Redis rate limits, account lockout, Zod everywhere, Mongo filter sanitising, AES-256-GCM helper for integration keys.
+- Worker (`pnpm worker`): BullMQ notifications queue (email via SMTP/Mailpit, SMS via console provider), retries with back-off, failed-job list + retry button at `/admin/system`.
+- Media: signed direct upload endpoint for Cloudinary with type/size limits and a magic-byte checker.
+- Design system: brand tokens (light + dark), Bangla font, motion primitives that respect the admin motion level and OS reduce-motion. Temporary home page shows them.
+- Shared helpers: poisha money, BD phone normalising (`+8801…`), atomic counters, soft-delete plugin.
+- CI workflow + Dependabot.
+
+**Verified (2026-11-19, production build on this Mac)**
+
+- `pnpm check`: lint clean, typecheck clean, **33 unit tests pass**; `pnpm build` succeeds (storefront static, admin dynamic).
+- Owner: invite email → set password → sign in → forced 2FA enrolment → dashboard. All admin scripts carry the CSP nonce; no console CSP errors.
+- Staff user: `/admin` 200; `/admin/staff`, `/admin/audit`, `/admin/system` → **HTTP 403**; media upload signing → 403; owner-only menu items hidden.
+- 5 wrong passwords → 6th attempt (even with the right password) → 429 for 15 minutes; lockout appears in the audit log.
+- Blocking a staff member signs them out immediately.
+- Customer sign-up → verification email in Mailpit; short password rejected; non-BD phone rejected for OTP; BD phone OTP sent through the worker.
+- 50 parallel counter increments → 50 unique sequential numbers.
+
+**Not done / notes**
+
+- CI has not run yet (needs a push to GitHub).
+- Google sign-in and Cloudinary uploads are wired but untested until you add keys.
+- Phone-only customer sign-up (no email) moves to Phase 2, together with the real SMS provider.
+- Invite links expire after 1 hour (same as password resets); the owner can re-send by inviting the same email again.
+- Playwright end-to-end tests start in Phase 1 (the checks above were done by hand + curl).
+- The SRS's suggested `sessions`/`otps` collection shapes are replaced by Better Auth's own collections (`sessions`, `accounts`, `verifications`, `twoFactor`).
+
+**Needed from you:** store name; review and merge the branch; Google OAuth client and Cloudinary keys (see "During Phase 0" above).
+
+**Next:** Phase 1.1 — categories and collections.
+
 ### 2026-11-19 · Planning
+
 - Read the SRS and turned it into the phase/step checklist above.
 - Copied the SRS into `docs/` so the spec lives with the code.
 - Checked the Mac: Node v26, pnpm, Docker and Git are installed.
