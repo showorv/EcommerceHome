@@ -1,0 +1,776 @@
+SRS – E-commerce Website for China Import Store (BD)
+Nov 19, 2026 · @Showrov
+Summary
+This document specifies a single-brand e-commerce website for selling China-imported kitchen, home and lifestyle gadgets in Bangladesh. It has two parts: a storefront with a distinctive, motion-rich design, and an admin panel that controls everything, including products, orders, customers, and every section, banner, menu and colour of the storefront.
+The store will launch without a payment gateway because there is no merchant account yet. Orders come in through a checkout form and are paid by Cash on Delivery (COD). Customers can optionally pay the delivery charge (or the full amount) in advance by bKash/Nagad Send Money and enter the transaction ID. Staff verify each order by phone or OTP and then confirm it. On confirmation the system creates an invoice and sends the customer an SMS and an email with a secure invoice link.
+Customers can sign in with Google or with email/phone and a password. They can also check out as guests. The stack is Next.js (App Router) + TypeScript + MongoDB, with shadcn/ui for interface components, Framer Motion and GSAP for motion, and optional Three.js / React Three Fiber for 3D product views.
+The system is designed for security first (OWASP-aligned controls, role-based admin access, audit logs, fraud checks on orders) and horizontal scalability (stateless app servers, CDN-served media, caching, background job queue).
+Key decisions at a glance
+Topic
+Decision
+Payment (v1)
+COD + optional manual bKash/Nagad advance with TrxID; gateway added in a later phase
+Delivery charge
+Calculated at checkout from admin-set zones (inside Dhaka / Dhaka suburbs / outside Dhaka) and weight
+Order confirmation
+Phone OTP at checkout + staff call/verify in admin before "Confirmed"
+Invoice
+PDF generated on confirmation, shared by signed link via SMS + email
+Auth
+Google OAuth + email/phone + password; guest checkout allowed
+Content management
+Every storefront section, banner, menu, page and theme token editable in admin
+Delivery
+Courier API integration (Steadfast first; Pathao/RedX later)
+1. Introduction
+1.1 Purpose
+This Software Requirements Specification (SRS) defines what the store website must do (functional requirements) and how well it must do it (non-functional requirements). It is the shared reference for the two founders, any developer or designer who joins, and later for testing and acceptance.
+1.2 Scope
+In scope for v1
+	•	Public storefront: home, category/collection pages, search, product detail, cart, checkout, order tracking, account area, CMS pages (About, Policies, FAQ, Contact).
+	•	Product media: multiple images and videos per product, variants (colour/size/model), stock per variant.
+	•	Order capture without a payment gateway: COD, manual bKash/Nagad advance with transaction ID, zone-based delivery charge.
+	•	Order verification and confirmation, invoice generation, SMS + email notifications.
+	•	Customer authentication: Google sign-in, email/phone + password, guest checkout.
+	•	Admin panel: catalogue, inventory, orders, customers, coupons, delivery zones, storefront builder (sections, banners, menus, theme), CMS pages, notification templates, staff and roles, reports, audit log, settings.
+	•	Courier booking via API (Steadfast first).
+Out of scope for v1 (planned later)
+	•	Online payment gateway (bKash/Nagad merchant checkout, SSLCommerz, cards).
+	•	Multi-vendor marketplace, wholesale/B2B portal.
+	•	Native mobile apps (the site will be a mobile-first, installable PWA instead).
+	•	Loyalty points, affiliate programme, live chat (a WhatsApp/Messenger button is in scope).
+1.3 User roles
+Role
+Who
+Main abilities
+Visitor
+Anyone browsing
+Browse, search, add to cart, guest checkout, track order by order number + phone
+Customer
+Registered user
+Everything a visitor can do, plus saved addresses, order history, wishlist, re-order, invoice downloads
+Staff
+Order handler / packer
+View and update orders they are allowed to, call/verify customers, print invoices and labels
+Manager
+Operations lead
+Staff abilities + products, inventory, coupons, delivery zones, storefront content, reports
+Owner (Super admin)
+The two founders
+Everything, including staff/roles, settings, integrations, API keys, data export and audit log
+Permissions are granular (for example orders.confirm, products.edit, cms.publish), so custom roles can be created later without code changes.
+1.4 Definitions
+Term
+Meaning
+COD
+Cash on Delivery: the courier collects the money from the customer at the door
+Advance
+Part payment (usually the delivery charge) sent by bKash/Nagad before dispatch to reduce fake orders
+TrxID
+Transaction ID shown in the bKash/Nagad confirmation SMS; customer enters it at checkout
+RTO
+Return to Origin: parcel refused or undeliverable, sent back to the seller
+Delivery zone
+A group of districts/areas sharing the same delivery charge and courier settings
+CMS
+Content Management System: the admin tools that edit storefront content without code
+Section
+A reusable storefront block (hero, product carousel, category grid, banner, testimonial, etc.)
+SKU
+Stock-keeping unit: one sellable variant of a product
+RBAC
+Role-based access control
+ISR
+Incremental Static Regeneration: Next.js caching that rebuilds pages in the background
+2. Receiving orders without a payment gateway
+Short answer: yes, orders come in through a checkout form, but a structured one tied to the cart, stock and delivery zones, not a loose contact form. The customer pays by COD. For risky orders (or always, if you choose), they also pay the delivery charge in advance by bKash/Nagad Send Money and type in the TrxID. Staff check the payment and the customer and then press Confirm. That press triggers the invoice, the SMS and the email.
+2.1 Payment options in v1
+Method
+How it works
+When to use
+Cash on Delivery
+Courier collects product price + delivery charge at the door and pays you out
+Default for all orders
+COD with delivery-charge advance
+Customer sends the delivery charge to your bKash/Nagad number; enters sender number + TrxID; product price collected as COD
+Outside-Dhaka orders, high-value orders, new customers, or customers with past returns (rules set in admin)
+Full advance (manual)
+Customer sends the full amount by bKash/Nagad + TrxID; courier collects nothing
+Optional, for customers who prefer it; can carry a small discount
+Receiving account. Avoid using a plain personal wallet for business receipts. bKash offers a Personal Retail Account (PRA) for micro and small retail and f-commerce sellers, and Bangladesh Bank allows these accounts without a trade licence (with e-KYC). Customers can pay a PRA by QR or by account number, which suits this manual flow. Check the current limits with bKash before launch. The admin panel stores the receiving numbers (bKash, Nagad) and shows them, with a QR image, on the checkout page.
+Why manual TrxID and not "Send Money" screenshots? A TrxID can be checked against the wallet's own transaction history in seconds. Screenshots are easy to fake.
+2.2 Checkout form fields
+Field
+Rules
+Full name
+Required, 2–80 characters
+Mobile number
+Required, Bangladeshi format 01[3-9]XXXXXXXX, normalised to +8801…; OTP-verified (see 2.4)
+Email
+Optional for guests (needed for the email invoice), required for registered customers
+District → Area/Thana
+Required, dropdowns from admin-managed location data; drives the delivery zone
+Full address
+Required, free text, 10–250 characters
+Delivery note
+Optional (landmark, preferred time)
+Payment method
+COD / COD + advance / full advance (only the options the zone and rules allow)
+Sender wallet number + TrxID
+Shown and required only for advance options; TrxID format-checked and unique across orders
+Coupon code
+Optional
+Accept terms & return policy
+Required checkbox
+The order summary beside the form updates live: subtotal, discount, delivery charge, advance due now, COD amount to pay at the door, and grand total.
+2.3 How the delivery charge is calculated
+	•	The customer picks a district and area. Each area belongs to one delivery zone set in admin (for example Inside Dhaka, Dhaka suburbs such as Savar, Gazipur and Narayanganj, and Outside Dhaka).
+	•	Each zone has a base charge for the first kg and an extra charge per additional kg. The cart weight is the sum of variant weights (packaging weight is added from settings).
+	•	Optional rules, all set in admin: free delivery above a cart value, free delivery on selected products, a flat-rate campaign, or a COD handling fee as a percentage.
+	•	The server calculates the charge again at order placement. The client-side value is never trusted.
+Example with admin-set values: Inside Dhaka ৳70 up to 1 kg + ৳15/kg; Outside Dhaka ৳130 up to 1 kg + ৳20/kg. Final values should match your courier contract.
+2.4 Confirming the order (fake-order protection)
+Fake and "try-and-refuse" orders are the main cost of COD. v1 uses layered checks:
+	•	Phone OTP at checkout – a 6-digit code by SMS proves the number is real and owned by the person ordering. Codes expire in 5 minutes, allow at most 5 tries, and resends are rate-limited.
+	•	Automatic risk score at placement, based on: a new vs returning phone, past cancellations/RTOs for this phone or address, order value, zone, multiple orders from the same IP/device in a short time, and a mismatch between name and past orders. High-risk orders require an advance payment, or are flagged for a call.
+	•	Courier success-rate lookup (optional) – some couriers and third-party tools expose a phone's delivery success rate, which the panel shows beside the order.
+	•	Staff verification in admin – staff see the order in a Pending queue, call the customer (click-to-call), check any TrxID against the wallet statement, then press Confirm or Cancel with a reason. Each action is recorded in the audit log.
+	•	On Confirm – stock is committed, the invoice number is assigned, the invoice PDF is generated, and the SMS + email with the invoice link are queued.
+2.5 What the customer receives
+	•	Right after placing: an on-screen thank-you page with the order number and a short SMS such as "Order #SR10234 received. We will call you to confirm."
+	•	On confirmation: SMS – "Order #SR10234 confirmed. Total ৳1,450 (COD ৳1,350). Invoice: https://yourshop.com/i/xxxxx" – and an email with the same link and a PDF attached.
+	•	On shipping: SMS with the courier name and tracking code.
+	•	On delivery / return: a status SMS and an optional review request.
+SMS texts are kept short and stored as editable templates in admin (Bangla and English) so they fit one or two SMS segments.
+3. Order lifecycle
+
+order lifecycle · 8 states, 1 staff check
+Every order starts as Pending with stock reserved. Nothing customer-facing beyond the "order received" SMS happens until a staff member verifies it. Only Confirmed triggers the invoice, the SMS and the email. Cancelled and returned orders give their stock back automatically. Allowed transitions are enforced on the server (FR-OR-01), and each change is written to the order's status history and the audit log.
+4. Functional requirements
+Priority: M = must have for launch, S = should have (soon after launch), C = could have.
+4.1 Storefront and design
+ID
+Requirement
+Pri
+FR-SF-01
+Home page is built entirely from admin-managed sections (hero/slider, category grid, product carousel, featured collection, promo banner, video banner, USP strip, testimonials, FAQ, newsletter, custom HTML-free rich text). Admin can add, remove, reorder, schedule and hide sections.
+M
+FR-SF-02
+Header menu, mega-menu, footer columns, announcement bar and social links are editable in admin.
+M
+FR-SF-03
+Theme tokens (primary/accent colours, fonts from a curated list, corner radius, light/dark default, logo, favicon) editable in admin, applied as CSS variables without a rebuild.
+M
+FR-SF-04
+Page-level motion: scroll-reveal for sections, smooth page transitions, parallax hero, GSAP-driven pinned "story" sections for hero products. Admin can switch motion intensity (full / reduced / off).
+M
+FR-SF-05
+Respect the user's OS "reduce motion" setting automatically.
+M
+FR-SF-06
+Optional 3D product viewer (GLB model, rotate/zoom) on the product page and in a hero section, loaded only when the product has a model.
+C
+FR-SF-07
+Category / collection pages with filters (price, category, colour, in stock, rating), sorting and infinite scroll or pagination (admin choice).
+M
+FR-SF-08
+Instant search with suggestions (products, categories) and typo tolerance; search results page.
+M
+FR-SF-09
+CMS pages (About, Privacy, Terms, Return & Refund, Shipping, FAQ, Contact) built with a block editor in admin.
+M
+FR-SF-10
+Floating WhatsApp / Messenger button with admin-set number and page.
+M
+FR-SF-11
+Bangla and English UI text, switchable; product fields can hold both languages.
+S
+FR-SF-12
+Installable PWA with offline fallback page.
+S
+4.2 Product card
+ID
+Requirement
+Pri
+FR-PC-01
+Card shows primary image, name, price, compare-at price with % off badge, rating, stock badge ("Only 3 left"), and admin-set labels (New, Hot, Bestseller).
+M
+FR-PC-02
+Hover image swap: on hover (desktop) the primary image cross-fades or slides to the second image; on touch devices a swipe or dot indicator does the same.
+M
+FR-PC-03
+Pop/lift effect on hover: card scales slightly, shadow deepens, and an action bar slides up (Quick view, Add to cart, Wishlist), built with Framer Motion springs.
+M
+FR-PC-04
+Quick-view popup: opens a modal with the image/video gallery, variant picker, quantity and Add to cart without leaving the page; URL updates so it can be shared and the Back button closes it.
+M
+FR-PC-05
+If a product has a short video, admin can set it to auto-play muted on hover instead of the image swap.
+S
+FR-PC-06
+Card style is selectable in admin (e.g. Minimal, Glass, Bold), so the look can change without code.
+S
+FR-PC-07
+Images use responsive sizes, blur placeholders and lazy loading; layout does not shift while loading.
+M
+4.3 Product detail page
+ID
+Requirement
+Pri
+FR-PD-01
+Gallery supports multiple images and videos (uploaded MP4/WebM or YouTube link), thumbnails, swipe, pinch/zoom, and full-screen lightbox.
+M
+FR-PD-02
+Variants (e.g. colour, size, model) with their own price, stock, SKU, weight and images; selecting a variant switches the gallery.
+M
+FR-PD-03
+Rich description blocks (text, image, video, comparison table, "what's in the box", specs), editable per product.
+M
+FR-PD-04
+Delivery estimate and charge preview by district before checkout.
+S
+FR-PD-05
+"Order now" (direct to checkout) and "Add to cart" buttons; sticky add-to-cart bar on mobile.
+M
+FR-PD-06
+Reviews with photos from verified buyers, admin-moderated.
+S
+FR-PD-07
+Related products, "frequently bought together" bundles with a bundle discount.
+S
+FR-PD-08
+SEO fields per product (slug, meta title, description, OG image) and Product structured data.
+M
+4.4 Cart and checkout
+ID
+Requirement
+Pri
+FR-CO-01
+Slide-out cart drawer and full cart page; cart persists for guests (local + server) and merges into the account on sign-in.
+M
+FR-CO-02
+Single-page checkout as described in section 2, with live totals and zone-based delivery charge.
+M
+FR-CO-03
+Phone OTP verification before placing the order (can be skipped for signed-in customers with a verified phone).
+M
+FR-CO-04
+Coupons: fixed or %, minimum order, per-customer limit, date range, product/category scope, free delivery coupons.
+M
+FR-CO-05
+Server-side re-validation at submission: prices, stock, coupon, delivery charge, advance amount, TrxID uniqueness.
+M
+FR-CO-06
+Idempotent order submission (double-click or retry never creates two orders).
+M
+FR-CO-07
+Stock is reserved for pending orders for an admin-set time (e.g. 24 h) and released if the order is cancelled or not confirmed in time.
+M
+FR-CO-08
+Abandoned-checkout capture (phone + cart) when a customer fills the phone but leaves, visible to staff for follow-up calls.
+S
+4.5 Customer accounts
+ID
+Requirement
+Pri
+FR-AC-01
+Sign up / sign in with Google.
+M
+FR-AC-02
+Custom sign up with name, email and/or phone, and password; email verification link and/or phone OTP.
+M
+FR-AC-03
+Sign in with email or phone + password; optional passwordless phone OTP sign-in.
+M
+FR-AC-04
+Forgot / reset password by email link or phone OTP.
+M
+FR-AC-05
+Account linking: a Google sign-in with the same verified email attaches to the existing account, never creates a duplicate.
+M
+FR-AC-06
+Account area: profile, saved addresses, order history with status timeline, invoice download, re-order, wishlist, sign out of all devices, delete account.
+M
+FR-AC-07
+Guest order tracking with order number + phone.
+M
+4.6 Orders, invoices and notifications
+ID
+Requirement
+Pri
+FR-OR-01
+Order statuses: Pending → Confirmed → Packed → Shipped → Delivered, with side states On hold, Cancelled, Returned (RTO), Partially delivered. Allowed transitions are enforced on the server.
+M
+FR-OR-02
+Payment status per order: Unpaid, Advance pending verification, Advance verified, Paid (COD collected), Refunded; tracked separately from order status.
+M
+FR-OR-03
+On Confirmed, the system assigns a sequential invoice number (e.g. INV-2026-000123), generates a PDF invoice, and queues SMS + email with a signed invoice link.
+M
+FR-OR-04
+Invoice link is a random, unguessable token URL (no order ID in it), viewable without login, expires after an admin-set period (e.g. 90 days) and can be revoked/regenerated.
+M
+FR-OR-05
+Invoice shows shop details, invoice and order numbers, dates, customer and address, items with variant/SKU, subtotal, discount, delivery charge, advance paid (with TrxID last 4), COD amount due, and a QR code to the online invoice. Bangla font supported.
+M
+FR-OR-06
+Notification templates (SMS + email) for each event are editable in admin with placeholders such as {name}, {order_no}, {cod_amount}, {invoice_link}.
+M
+FR-OR-07
+Every notification is logged with delivery status from the provider; failed sends retry automatically and can be resent manually.
+M
+FR-OR-08
+Staff can edit an order before confirmation (items, address, delivery charge) with every change recorded.
+M
+FR-OR-09
+Internal notes and call outcome per order ("no answer", "confirmed by phone", "asked to call later").
+M
+4.7 Admin panel
+ID
+Requirement
+Pri
+FR-AD-01
+Dashboard: today/week/month orders, revenue, confirmation rate, delivery success rate, RTO rate, top products, low-stock list, pending orders needing a call.
+M
+FR-AD-02
+Products: create/edit/duplicate/archive, variants, bulk price/stock edit, CSV import/export, drag-and-drop media upload (images, videos, 3D model), image focal point and alt text.
+M
+FR-AD-03
+Categories and collections (manual or rule-based, e.g. "price under ৳500").
+M
+FR-AD-04
+Inventory: stock per variant, low-stock threshold, stock movement history, purchase batches with landed cost (to report real profit per product).
+M
+FR-AD-05
+Orders: filter by status/zone/date/payment, bulk confirm, bulk print invoices and labels, bulk book courier, export.
+M
+FR-AD-06
+Customers: profile, order history, lifetime value, return rate, block/flag a phone number.
+M
+FR-AD-07
+Storefront builder: visual list of sections per page with live preview, drafts and scheduled publishing; banners with start/end dates; menu editor; theme editor.
+M
+FR-AD-08
+Delivery zones and charges, receiving wallet numbers, advance rules, reservation time.
+M
+FR-AD-09
+Staff and roles: invite by email, assign role, 2FA required for admin users, session list with forced sign-out.
+M
+FR-AD-10
+Audit log of every admin action (who, what, when, before/after, IP).
+M
+FR-AD-11
+Reports: sales, profit by product (price − landed cost − delivery − returns), courier performance, coupon usage; CSV export.
+S
+FR-AD-12
+Integrations settings page for SMS, email, courier and storage keys, stored encrypted and never shown in full after saving.
+M
+FR-AD-13
+Marketing pixels and analytics (Meta Pixel + Conversions API, GA4, TikTok) configured from admin.
+S
+5. Non-functional requirements
+5.1 Security
+The controls follow the OWASP Top 10 and the OWASP ASVS Level 2 as the target.
+Authentication and sessions
+ID
+Requirement
+NFR-SEC-01
+Passwords hashed with Argon2id (or bcrypt cost ≥ 12); minimum 8 characters, checked against a breached-password list; never logged or emailed.
+NFR-SEC-02
+Sessions in HttpOnly, Secure, SameSite=Lax cookies; short-lived access token plus rotating refresh token, or database sessions; tokens never in localStorage.
+NFR-SEC-03
+Google OAuth uses Authorization Code + PKCE with state and nonce checks; only verified Google emails are linked to existing accounts.
+NFR-SEC-04
+Admin area is separate (/admin with its own auth middleware, or a separate subdomain) and requires 2FA (TOTP app) for every staff account. Optional IP allow-list for the Owner role.
+NFR-SEC-05
+Rate limiting and lockout: sign-in 5 attempts / 15 min per account + IP; OTP send 3 per 10 min per phone and 10 per hour per IP; checkout 5 orders per hour per phone; generic error messages that do not reveal whether an account exists.
+NFR-SEC-06
+Bot protection (Cloudflare Turnstile or reCAPTCHA v3) on sign-up, OTP request and checkout, triggered by risk to avoid friction for normal users.
+Authorisation and data protection
+ID
+Requirement
+NFR-SEC-07
+RBAC enforced on the server for every admin route, server action and API handler; the UI hiding a button is never the only check.
+NFR-SEC-08
+Object-level checks: a customer can read only their own orders/addresses; invoice access only through its token.
+NFR-SEC-09
+All input validated with Zod schemas shared by client and server; MongoDB queries built only from validated values, with operator injection ($where, $ne, etc.) blocked by schema and sanitiser.
+NFR-SEC-10
+Output encoding by React; rich text stored as structured JSON (not raw HTML) and sanitised with DOMPurify if HTML is ever rendered.
+NFR-SEC-11
+Security headers: strict Content-Security-Policy with nonces, HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, frame-ancestors none.
+NFR-SEC-12
+CSRF protection for any cookie-authenticated mutation (Next.js server actions' origin check + SameSite cookies + CSRF token on custom API routes).
+NFR-SEC-13
+Secrets (DB URI, API keys) only in environment variables / a secrets manager; integration keys entered in admin are encrypted at rest (AES-256-GCM) and shown masked.
+NFR-SEC-14
+Personal data minimised: phone, name and address only as needed; TrxID stored but shown masked; data export and deletion on request; MongoDB encryption at rest and TLS in transit.
+NFR-SEC-15
+File uploads: type checked by magic bytes, size limits (images 10 MB, videos 100 MB, 3D 20 MB), images re-encoded (strips EXIF and hidden payloads), uploaded directly to object storage with pre-signed URLs, never executed or served from the app server.
+NFR-SEC-16
+Audit log is append-only and cannot be edited by any role; retained for at least 1 year.
+NFR-SEC-17
+Dependency scanning (npm audit / Dependabot / Snyk) in CI; no deploy with known critical vulnerabilities.
+NFR-SEC-18
+Webhooks from couriers/SMS providers verified by signature or secret and replay-protected.
+NFR-SEC-19
+Daily automated database backups with 30-day retention and point-in-time restore; a restore test every quarter.
+5.2 Scalability
+ID
+Requirement
+NFR-SC-01
+Stateless app servers: no session or file stored on the server, so instances can be added behind a load balancer (or run serverless).
+NFR-SC-02
+Product, category and CMS pages rendered statically / with ISR and on-demand revalidation: when an admin saves a product or section, only the affected pages are rebuilt.
+NFR-SC-03
+All media served from object storage through a CDN with automatic resizing and modern formats (AVIF/WebP); video streamed in adaptive sizes.
+NFR-SC-04
+A cache layer (Redis) for session lookups, rate-limit counters, cart, settings and hot product data.
+NFR-SC-05
+Slow work runs in a background job queue (BullMQ on Redis or a managed queue): SMS, email, PDF generation, courier booking, image processing, reports. Jobs are retried with back-off and have a dead-letter list visible in admin.
+NFR-SC-06
+MongoDB indexes for every frequent query (see section 7); pagination by cursor, not large skips; read replicas or a larger tier when traffic grows.
+NFR-SC-07
+Stock decrement and order number assignment are atomic (MongoDB transactions / findOneAndUpdate with conditions) so flash sales cannot oversell.
+NFR-SC-08
+Capacity target for v1 design: 50,000 monthly visitors, 500 concurrent users during a campaign, 2,000 orders/day without code changes; scale-up path documented.
+NFR-SC-09
+Modular code layout (catalogue, orders, CMS, auth, notifications, integrations) so that a part can later move to its own service if needed.
+5.3 Performance
+ID
+Requirement
+NFR-PF-01
+Core Web Vitals on a mid-range Android on 4G: LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 for home, category and product pages.
+NFR-PF-02
+Initial JavaScript for storefront pages kept small: GSAP, 3D (Three.js) and video players loaded only on pages/sections that use them (dynamic import).
+NFR-PF-03
+Animations use transform and opacity only, target 60 fps, and pause when off-screen.
+NFR-PF-04
+API p95 response ≤ 300 ms for catalogue reads, ≤ 800 ms for order placement (excluding OTP SMS delivery).
+5.4 Availability and reliability
+ID
+Requirement
+NFR-AV-01
+99.5% monthly uptime target for the storefront; uptime monitoring with alerts to both founders.
+NFR-AV-02
+If SMS or email provider fails, the order is still saved and the notification retried; a second SMS provider can be set as fallback.
+NFR-AV-03
+Error tracking (Sentry) and structured logs with request IDs; no personal data in logs.
+NFR-AV-04
+Zero-downtime deploys with preview environments for every pull request.
+5.5 SEO, accessibility and usability
+ID
+Requirement
+NFR-UX-01
+Server-rendered HTML, clean slugs, canonical URLs, XML sitemap, robots.txt, Product/Breadcrumb/Organization structured data, Open Graph images.
+NFR-UX-02
+WCAG 2.1 AA: keyboard access to all controls (including quick view and galleries), visible focus, alt text required in admin, colour contrast checked on theme save.
+NFR-UX-03
+Mobile-first: most traffic will come from phones via Facebook ads; checkout must be usable one-handed on a 360 px wide screen.
+NFR-UX-04
+Admin panel usable on a tablet/phone for order confirmation calls on the go.
+6. Architecture and tech stack
+6.1 Overview
+One Next.js (App Router) monorepo serves both the storefront and the admin panel, with a separate worker process for background jobs. Both talk to MongoDB and Redis. Media lives in object storage behind a CDN.
+	•	Storefront (app/(store)) – mostly static/ISR pages, Server Components for data, client components only for interactive parts (cart, quick view, galleries, motion).
+	•	Admin (app/admin) – dynamic, authenticated, never cached publicly; uses shadcn/ui data tables, forms and dialogs.
+	•	API layer – Server Actions for form mutations from our own UI; Route Handlers (app/api/*) for webhooks (courier, SMS delivery reports), the invoice link, and any future mobile app.
+	•	Domain modules (/modules/catalog, /orders, /cms, /auth, /notifications, /shipping, /inventory) hold business logic and validation; UI code never talks to the database directly.
+	•	Worker – a Node.js process running BullMQ consumers for SMS, email, PDF invoices, courier booking, image/video processing and scheduled tasks (release expired stock reservations, publish scheduled banners).
+6.2 Stack
+Layer
+Choice
+Notes
+Framework
+Next.js (App Router), React, TypeScript (strict)
+Server Components, Server Actions, ISR, Image optimisation
+UI
+Tailwind CSS + shadcn/ui (Radix primitives)
+Accessible dialogs, dropdowns, data tables; theme via CSS variables
+Motion
+Framer Motion (Motion) for component and layout animation (card hover, quick-view, shared-element transitions); GSAP + ScrollTrigger for scroll-driven hero/story sections; Lenis for smooth scroll (optional)
+Both lazy-loaded where used
+3D (optional)
+Three.js via React Three Fiber + drei, GLB models compressed with Draco/Meshopt
+Only on products/sections that have a model
+Database
+MongoDB (Atlas, Singapore or Mumbai region for low latency to BD) with Mongoose schemas
+Transactions for orders/stock
+Validation
+Zod
+Shared client/server schemas
+Auth
+Auth.js (NextAuth) with Google provider + Credentials provider + MongoDB adapter, or Better Auth
+2FA (TOTP) for admin users
+Cache / queue
+Redis (Upstash or self-hosted) + BullMQ
+Rate limits, cache, jobs
+Media storage
+Cloudflare R2 or AWS S3 + CDN; or Cloudinary for built-in image/video transforms
+Direct upload via pre-signed URLs
+Search
+MongoDB Atlas Search (v1); Meilisearch if needed later
+Typo-tolerant, Bangla-friendly
+PDF
+@react-pdf/renderer or headless Chromium (Playwright) in the worker
+Bangla font (e.g. Hind Siliguri / Noto Sans Bengali) embedded
+Email
+Resend, Amazon SES or Brevo; templates in React Email
+SPF, DKIM, DMARC set on your domain
+SMS
+A BTRC-listed Bangladeshi SMS gateway (see section 8)
+Masking sender ID for brand name
+Rich text / CMS
+Tiptap or Lexical editor storing JSON
+Rendered by our own components
+Forms
+React Hook Form + Zod resolver
+
+State
+TanStack Query (admin), Zustand (cart)
+
+Testing
+Vitest (unit), Playwright (end-to-end), k6 (load)
+
+Observability
+Sentry, uptime monitor, structured logs (pino)
+
+CI/CD
+GitHub Actions: lint, typecheck, test, build, deploy
+Preview deploy per PR
+Hosting
+Option A: Vercel (app) + a small VPS or Railway/Render for the worker. Option B: one VPS (e.g. DigitalOcean/Hetzner Singapore) running Docker Compose (Next.js, worker, Redis) behind Cloudflare.
+Option B is cheaper at the start; Option A is simpler to scale
+6.3 Request flow for an order
+	•	Browser submits the checkout Server Action with the cart ID, form data and an idempotency key.
+	•	Server validates with Zod, checks the OTP session, recalculates prices, delivery charge and coupon, and computes the risk score.
+	•	A MongoDB transaction creates the order, reserves stock, and writes an order.created event.
+	•	The job queue sends the "order received" SMS and alerts staff (admin notification + optional Telegram/WhatsApp alert).
+	•	Staff confirm in admin → transaction updates status, commits stock, assigns invoice number → jobs generate the PDF and send SMS + email.
+	•	Staff (or an auto-rule) book the courier → courier consignment and tracking code saved → courier webhooks update status to Shipped / Delivered / Returned.
+6.4 Environments
+Environment
+Purpose
+Local
+Docker Compose with MongoDB, Redis, Mailpit (fake email), SMS logged to console
+Preview
+Per pull request, seeded test data, sandbox keys
+Staging
+Same as production with sandbox courier/SMS, used for acceptance tests
+Production
+Live keys, backups, monitoring, 2FA-only admin
+7. Data model (MongoDB collections)
+All documents have _id, createdAt, updatedAt. Money is stored as integers in poisha (৳1 = 100) to avoid rounding errors. Soft delete (deletedAt) is used for products, customers and content.
+Collection
+Key fields
+Indexes
+users
+name, email (unique, sparse), phone (unique, sparse), phoneVerified, emailVerified, passwordHash, role (customer/staff/manager/owner), permissions[], twoFactor {secretEnc, enabled}, status (active/blocked), riskFlags
+email, phone, role
+accounts
+userId, provider (google/credentials), providerAccountId
+(provider, providerAccountId) unique
+sessions
+userId, tokenHash, userAgent, ip, expiresAt
+tokenHash; TTL on expiresAt
+otps
+phone, codeHash, purpose (checkout/login/reset), attempts, expiresAt
+phone + purpose; TTL on expiresAt
+addresses
+userId, label, name, phone, districtId, areaId, line, note, isDefault
+userId
+products
+title {en, bn}, slug (unique), status (draft/active/archived), categoryIds[], collectionIds[], tags[], description (rich JSON), specs[], media[] {type image/video/model, url, alt, poster, order}, hoverMediaIndex, labels[], seo {title, description, ogImage}, ratingAvg, ratingCount, sortScore
+slug unique; (status, categoryIds); text/Atlas Search index on title + tags
+variants
+productId, sku (unique), options {color, size, model}, price, compareAtPrice, costPrice (landed), weightGrams, stock, reserved, lowStockAt, mediaIds[]
+productId; sku unique
+categories
+name {en, bn}, slug, parentId, image, order, seo
+slug unique; parentId
+collections
+name, slug, type (manual/rule), rules[], productIds[]
+slug unique
+inventoryMovements
+variantId, change (+/−), reason (purchase/order/return/adjust), refId, byUserId, costPerUnit
+variantId + createdAt
+carts
+userId or guestToken, items[] {variantId, qty}, couponCode, expiresAt
+userId; guestToken; TTL on expiresAt
+orders
+orderNo (unique, e.g. SR10234), userId?, customer {name, phone, email}, shippingAddress {district, area, line, note}, zoneId, items[] {productId, variantId, title, sku, price, qty, cost} (snapshot), subtotal, discount, deliveryCharge, codFee, total, advance {method, senderNumber, trxId, amount, status, verifiedBy, verifiedAt}, codAmount, paymentStatus, status, statusHistory[] {status, at, by, note}, riskScore, riskReasons[], callLog[], notes[], couponCode, source (web/fb/whatsapp/manual), utm {}, courier {name, consignmentId, trackingCode, bookedAt, lastStatus}, invoiceId, idempotencyKey (unique)
+orderNo unique; (status, createdAt); customer.phone; advance.trxId unique sparse; courier.consignmentId; idempotencyKey unique
+invoices
+invoiceNo (unique, sequential), orderId, pdfUrl, accessTokenHash, tokenExpiresAt, revoked, issuedAt
+invoiceNo unique; accessTokenHash unique
+counters
+name (orderNo/invoiceNo), seq
+name unique (atomic $inc)
+coupons
+code (unique, upper-case), type (fixed/percent/free_delivery), value, minOrder, maxDiscount, usageLimit, perCustomerLimit, usedCount, startsAt, endsAt, scope {productIds, categoryIds}, active
+code unique
+deliveryZones
+name, areaIds[], baseCharge, baseWeightGrams, extraPerKg, codFeePercent, freeAbove, advanceRule (none/delivery/full), courierPreference
+name
+locations
+type (division/district/area), name {en, bn}, parentId, zoneId
+(type, parentId)
+reviews
+productId, userId, orderId, rating, text, images[], status (pending/approved/rejected)
+(productId, status)
+pages
+slug, title, sections[] (see sections shape), seo, status, publishedVersion, draftVersion, scheduledAt
+slug unique
+sections (embedded in pages or own collection)
+type (hero/productCarousel/categoryGrid/banner/video/story3d/testimonials/faq/richText…), settings {}, data {}, visibility {devices, startAt, endAt}, order
+pageId + order
+navigation
+location (header/footer/mobile), items[] (tree of label, link, icon, badge)
+location unique
+themeSettings
+colors {}, fonts {}, radius, motionLevel, cardStyle, logo, favicon, announcement {}
+single document
+settings
+shop info, receiving wallets[] {type, number, qrImage}, reservationHours, otpRequired, riskRules {}, invoice {prefix, footer, terms}
+single document (cached)
+integrations
+type (sms/email/courier/storage/analytics), provider, configEnc (encrypted), active, isFallback
+type
+notificationTemplates
+event (order_received/confirmed/shipped/delivered/cancelled/otp), channel (sms/email), language, subject, body
+(event, channel, language) unique
+notifications
+orderId?, userId?, channel, to, templateEvent, status (queued/sent/delivered/failed), providerMessageId, error, attempts
+orderId; status + createdAt
+auditLogs
+actorId, action (e.g. order.confirm), entity, entityId, before, after, ip, userAgent
+(entity, entityId); actorId + createdAt
+blockedContacts
+phone or address hash, reason, byUserId
+phone
+Design notes
+	•	Order items keep a snapshot of title, price and cost, so later product edits never change past orders or profit reports.
+	•	Order and invoice numbers come from the counters collection with an atomic increment, so they are sequential and never collide under load.
+	•	Stock check and reservation use a conditional update (stock - reserved >= qty) inside the order transaction to prevent overselling.
+	•	advance.trxId is unique so the same transaction ID cannot be reused on two orders.
+	•	TTL indexes clean up OTPs, sessions and abandoned guest carts automatically.
+8. Integrations
+Every integration sits behind an adapter interface (e.g. SmsProvider.send(), CourierProvider.createParcel()), so a provider can be swapped or a fallback added from admin without touching business logic.
+8.1 Google sign-in
+	•	Create an OAuth client in Google Cloud Console (Web application). Authorised redirect URI: https://<domain>/api/auth/callback/google; separate clients for staging and production.
+	•	Scopes: openid email profile only.
+	•	The OAuth consent screen needs the app name, logo, support email, and links to the Privacy Policy and Terms pages (which the CMS provides).
+8.2 SMS gateway (OTP and order messages)
+	•	Business SMS in Bangladesh must go through an aggregator that BTRC lists as an authorised A2P SMS provider. International APIs such as Twilio are much more expensive per message and are not the right route.
+	•	Two types: masking (your brand name as sender, e.g. "GADGETBD", needs sender-ID registration) and non-masking (numeric sender, cheaper). Use masking for order confirmations and invoices (trust), and non-masking or masking for OTP.
+	•	Indicative prices from one local provider: about ৳0.40 per non-masking and ৳0.64 per masking SMS at the entry recharge, falling with larger recharges. BTRC also set a floor price for bulk SMS in 2025. Compare 2–3 providers before choosing.
+	•	Requirements: HTTP/JSON API, delivery reports (webhook or polling), Unicode (Bangla) support, balance check API. Configure one primary and one fallback provider.
+	•	Cost control: OTP only once per checkout session, short templates (one segment where possible), and email for long content.
+8.3 Email
+	•	Transactional provider (Resend, Amazon SES or Brevo) on a sending subdomain such as mail.<domain>, with SPF, DKIM and DMARC configured.
+	•	Emails: verify email, reset password, order received, order confirmed (with invoice PDF attached + link), shipped, delivered, cancelled; staff invites and 2FA alerts.
+	•	Templates built in React Email, editable subject/body text in admin.
+8.4 Courier
+	•	Steadfast first: its merchant API lets you create orders (single or bulk), get a consignment ID and tracking code, check status and check balance. API key and secret come from the merchant dashboard. Payload maps directly: invoice (our order number), recipient name, phone, address, COD amount, note.
+	•	Pathao and RedX adapters next (both offer merchant APIs; Pathao needs city/zone/area IDs, so the locations collection stores each courier's IDs).
+	•	Booking: one click per order or bulk; auto-book on confirm (optional per zone). Status updates via webhook where available, otherwise a polling job every 30–60 minutes.
+	•	COD reconciliation: import courier payout reports (CSV or API) to mark orders as Paid and flag mismatches.
+8.5 Payments (later phase)
+	•	Once a trade licence and merchant account exist, add bKash Checkout / Tokenized, Nagad merchant and/or SSLCommerz behind a PaymentProvider adapter. The checkout already has a payment-method step, so this is an additional option, not a redesign.
+	•	Until then, the manual advance flow (section 2) is used, with TrxID verification by staff.
+8.6 Media storage and CDN
+	•	Object storage (Cloudflare R2 / S3) or Cloudinary. Browser uploads directly via pre-signed URL; the worker creates image sizes (AVIF/WebP), video posters and compressed MP4/WebM.
+	•	Public media cached on the CDN with long cache headers and versioned file names; invoice PDFs stored in a private bucket and served only through the signed invoice link.
+8.7 Marketing and analytics
+	•	Meta Pixel + Conversions API (server-side events for purchase/order confirmed, de-duplicated with the browser pixel), GA4, TikTok Pixel.
+	•	Facebook/Instagram product catalogue feed (XML/CSV) generated from products for dynamic ads.
+	•	Consent banner if required; analytics scripts loaded after the page is interactive.
+9. Delivery phases and acceptance criteria
+The week estimates assume two full-stack developers working part-time alongside the import business. Adjust them to your real availability.
+Phase
+Scope
+Est.
+0. Foundation
+Repo, CI/CD, environments, design system (tokens, shadcn theme, motion primitives), auth (Google + credentials + admin 2FA), RBAC, audit log, media upload pipeline
+2–3 weeks
+1. Catalogue + storefront
+Products, variants, media (images/videos), categories, product card with hover swap + pop + quick view, product page gallery, search, filters, CMS pages, storefront builder (sections, menus, theme)
+3–4 weeks
+2. Orders (launch)
+Cart, checkout, zones and delivery charge, OTP, COD + manual advance with TrxID, risk score, order admin, confirm flow, invoice PDF + signed link, SMS + email, Steadfast booking
+3–4 weeks
+3. Hardening + launch
+Security review (headers, rate limits, dependency scan), load test, Core Web Vitals pass, SEO, analytics + Conversions API, backups and restore test, staff training
+1–2 weeks
+4. Growth
+Reviews, bundles, abandoned-checkout follow-up, Pathao/RedX, reports with profit, Bangla UI, PWA, 3D viewer
+ongoing
+5. Payments
+bKash/Nagad/SSLCommerz gateway once a merchant account exists
+1–2 weeks
+9.1 Acceptance criteria (launch)
+Ordering and confirmation
+	•	A guest can place a COD order on a 360 px phone in under 2 minutes, including OTP.
+	•	Delivery charge shown at checkout equals the zone rule for every test district (inside Dhaka, suburb, outside Dhaka) and changes with cart weight.
+	•	Changing price or delivery charge in browser dev tools has no effect on the saved order.
+	•	Submitting the same checkout twice (double click, network retry) creates exactly one order.
+	•	When an outside-Dhaka order requires an advance, the order cannot be placed without a sender number and a TrxID; a TrxID used before is rejected.
+	•	Two customers buying the last unit at the same moment: one succeeds, one sees "out of stock"; stock never goes negative.
+	•	On Confirm, within 1 minute: invoice number assigned, PDF available, SMS and email delivered (or logged as failed with retry).
+	•	The invoice link opens without login, shows correct totals and COD amount, and stops working after it is revoked or expired; changing one character of the token returns "not found".
+Admin and content
+	•	A manager can add a product with 6 images and 2 videos, set the hover image, and see it on the storefront within 1 minute without a redeploy.
+	•	A manager can add, reorder, schedule and hide home-page sections and change theme colours, with a preview before publishing.
+	•	A staff user cannot open settings, integrations, staff management or reports (403 from the server, not just a hidden menu).
+	•	Every confirm, cancel, price change and setting change appears in the audit log with user, time and before/after values.
+Security and performance
+	•	Admin sign-in without the 2FA code fails; 6 wrong passwords lock the account for 15 minutes.
+	•	Security headers score A on a header scanner; no critical/high vulnerabilities in dependency scan.
+	•	OWASP ZAP baseline scan shows no high-risk findings.
+	•	Home, category and product pages meet LCP ≤ 2.5 s and CLS ≤ 0.1 on mobile (Lighthouse, 4G throttling).
+	•	Load test: 500 concurrent virtual users browsing and 20 orders/minute for 10 minutes with p95 under the targets in 5.3 and zero errors.
+	•	A backup can be restored to staging and the site runs from it.
+10. Open questions
+#
+Question
+Default if not decided
+1
+Store name, domain and SMS sender ID (masking name)?
+Needed before Phase 2 (sender ID registration takes time)
+2
+Require a delivery-charge advance for all outside-Dhaka orders, or only for risky ones?
+Risk-based: new customers outside Dhaka + orders above ৳3,000
+3
+Receiving account: bKash Personal Retail Account, Nagad, or both?
+Both, shown at checkout with QR codes
+4
+Which courier at launch, and do you have the merchant API keys?
+Steadfast; Pathao in Phase 4
+5
+Hosting: Vercel + small VPS for the worker, or one VPS with Docker?
+One VPS with Docker behind Cloudflare at launch (lowest cost), move app to Vercel if traffic grows
+6
+Media: Cloudinary (easier transforms, paid as you grow) or R2/S3 + own processing (cheaper, more work)?
+Cloudinary free tier at launch
+7
+Is Bangla UI needed at launch or later?
+English UI with Bangla product names/descriptions at launch; full Bangla in Phase 4
+8
+Return/refund policy terms (days, who pays return delivery)?
+3-day change of mind for unused items, customer pays return delivery; defects replaced free
+9
+Will you also take orders from Facebook/WhatsApp chats?
+Yes: admin "manual order" form with source = facebook/whatsapp, same confirm and invoice flow
+10
+Do you want VAT/BIN shown on invoices?
+Not at launch; invoice template has an optional BIN field
+Sources
+	•	bKash – Personal Retail Account for small businesses
+	•	bKash – Online business (PRA if no trade licence)
+	•	The Financial Express – Trade licence not mandatory for small traders' retail accounts
+	•	Telerivet – Sending SMS in Bangladesh: BTRC, masking and non-masking
+	•	Alpha SMS (sms.net.bd) – SMS packages and prices
+	•	Sent.dm – Bangladesh SMS pricing and BTRC floor price
+	•	SteadFast API plugin – merchant API credentials and features
+	•	Steadfast Python SDK docs – order creation fields
+	•	OWASP Top 10 and OWASP ASVS
