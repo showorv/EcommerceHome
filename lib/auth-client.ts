@@ -1,0 +1,10 @@
+"use client";
+
+import { createAuthClient } from "better-auth/react";
+import { inferAdditionalFields, phoneNumberClient } from "better-auth/client/plugins";
+import type { Auth } from "@/modules/auth/auth";
+
+/** Browser-side auth client. Talks to /api/auth/* on the same origin. */
+export const authClient = createAuthClient({
+  plugins: [inferAdditionalFields<Auth>(), phoneNumberClient()],
+});

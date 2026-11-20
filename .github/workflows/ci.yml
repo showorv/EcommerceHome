@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Build-time placeholders only; no real secrets in CI.
+      MONGODB_URI: mongodb://localhost:27017/ci?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://localhost:6379
+      BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Start MongoDB (single-node replica set)
+        # Storefront pages read the catalogue while prerendering, so the build needs a database (empty is fine).
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }" && break
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval "rs.status().ok"
+      - name: Build
+        run: pnpm build
+
+  dependency-audit:
+    # NFR-SEC-17: no deploy with known critical vulnerabilities.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level critical

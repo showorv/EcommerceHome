@@ -1,0 +1,63 @@
+/**
+ * Content-Security-Policy builders (NFR-SEC-11).
+ *
+ * - Storefront: static/ISR pages cannot carry a per-request nonce, so scripts are limited to
+ *   our own origin plus Next.js inline bootstrap scripts ('unsafe-inline'). Everything else
+ *   (frames, objects, base-uri, form targets, connections) is locked down.
+ * - Admin: always dynamic, so it gets a strict nonce + 'strict-dynamic' policy from proxy.ts.
+ */
+const MEDIA_HOSTS = ["https://res.cloudinary.com"];
+const GOOGLE_AVATARS = ["https://lh3.googleusercontent.com"];
+
+function join(directives: Record<string, string[]>): string {
+  return Object.entries(directives)
+    .map(([k, v]) => (v.length ? `${k} ${v.join(" ")}` : k))
+    .join("; ");
+}
+
+export function storefrontCsp(isDev: boolean, https = !isDev): string {
+  return join({
+    "default-src": ["'self'"],
+    "script-src": ["'self'", "'unsafe-inline'", ...(isDev ? ["'unsafe-eval'"] : [])],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS],
+    "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
+    "font-src": ["'self'"],
+    "connect-src": ["'self'", ...(isDev ? ["ws:"] : [])],
+    "frame-src": ["https://www.youtube-nocookie.com", "https://www.youtube.com"],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
+    ...(https ? { "upgrade-insecure-requests": [] } : {}),
+  });
+}
+
+export function adminCsp(nonce: string, isDev: boolean, https = !isDev): string {
+  return join({
+    "default-src": ["'self'"],
+    "script-src": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(isDev ? ["'unsafe-eval'"] : [])],
+    // Inline style attributes from UI libraries are low risk; scripts are what the nonce protects.
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS],
+    "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
+    "font-src": ["'self'"],
+    "connect-src": ["'self'", "https://api.cloudinary.com", ...(isDev ? ["ws:"] : [])],
+    "frame-src": ["'none'"],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
+    ...(https ? { "upgrade-insecure-requests": [] } : {}),
+  });
+}
+
+export const BASE_SECURITY_HEADERS: { key: string; value: string }[] = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+];
+
+export const HSTS = { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" };
