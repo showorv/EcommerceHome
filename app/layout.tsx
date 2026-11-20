@@ -1,16 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Hind_Siliguri, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { FONT_VARIABLES } from "@/lib/fonts";
 import "./globals.css";
-
-const sans = Plus_Jakarta_Sans({ variable: "--font-sans-latin", subsets: ["latin"], display: "swap" });
-// Bangla text (product names, SMS previews, invoices) falls back to Hind Siliguri.
-const bangla = Hind_Siliguri({
-  variable: "--font-bangla",
-  subsets: ["bengali"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   // Makes relative image/page URLs absolute in share previews (Open Graph) and canonical links.
@@ -28,7 +19,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${bangla.variable} h-full antialiased`}>
+    <html lang="en" className={`${FONT_VARIABLES} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         {children}
         <Toaster position="top-center" />

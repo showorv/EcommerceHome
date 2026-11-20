@@ -26,7 +26,7 @@ type EditorProps<T extends SectionType> = {
 
 // ---------- Small building blocks ----------
 
-function Text({
+export function Text({
   id,
   label,
   value,
@@ -71,7 +71,7 @@ function Text({
   );
 }
 
-function Choice<V extends string>({
+export function Choice<V extends string>({
   id,
   label,
   value,
@@ -156,7 +156,7 @@ function Pictures({
 }
 
 /** A list of items with move up / down / remove, and an add button. */
-function ItemList<T>({
+export function ItemList<T>({
   items,
   onChange,
   make,

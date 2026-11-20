@@ -11,6 +11,8 @@ import { writeAudit } from "@/modules/audit/audit";
 import type { Permission } from "@/modules/auth/rbac";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { TAGS } from "@/modules/catalog/cache-tags";
+import { designProblem, designSchema } from "./design";
+import { discardDesignDraft, publishDesign, saveDesignDraft, type DesignState } from "./design-data";
 import { NewsletterSubscriber } from "./models";
 import {
   cancelSchedule,
@@ -33,34 +35,47 @@ export type BuilderResult = { ok: true; page: PageState; message: string } | { o
 
 const versionSchema = z.number().int().min(0);
 
-async function guarded(
+type Actor = { id: string; email: string };
+
+/** Permission check → change → audit log; known problems come back as messages, the rest is logged. */
+async function audited<S extends { version: number }>(
   permission: Permission,
-  slug: string,
-  fn: (actor: {
-    id: string;
-    email: string;
-  }) => Promise<{ page: PageState; message: string; audit: string; detail?: unknown }>,
-): Promise<BuilderResult> {
+  entity: string,
+  entityId: string,
+  fn: (actor: Actor) => Promise<{ state: S; message: string; audit: string; detail?: unknown }>,
+): Promise<{ ok: true; state: S; message: string } | { ok: false; error: string }> {
   const g = await checkStaff(permission);
   if (!g.ok) return { ok: false, error: g.status === 401 ? "Please sign in again." : "You do not have permission." };
-  if (!isBuilderPage(slug)) return { ok: false, error: "Unknown page." };
   try {
     const actor = { id: g.ctx.user.id, email: g.ctx.user.email };
     const res = await fn(actor);
     await writeAudit({
       actor,
       action: res.audit,
-      entity: "page",
-      entityId: slug,
-      after: res.detail ?? { version: res.page.version },
+      entity,
+      entityId,
+      after: res.detail ?? { version: res.state.version },
       ...(await requestMeta()),
     });
-    return { ok: true, page: res.page, message: res.message };
+    return { ok: true, state: res.state, message: res.message };
   } catch (err) {
     if (err instanceof PageError) return { ok: false, error: err.message };
-    logger.error({ err }, "storefront builder action failed");
+    logger.error({ err }, "storefront action failed");
     return { ok: false, error: "Something went wrong. Please try again." };
   }
+}
+
+async function guarded(
+  permission: Permission,
+  slug: string,
+  fn: (actor: Actor) => Promise<{ page: PageState; message: string; audit: string; detail?: unknown }>,
+): Promise<BuilderResult> {
+  if (!isBuilderPage(slug)) return { ok: false, error: "Unknown page." };
+  const res = await audited(permission, "page", slug, async (a) => {
+    const r = await fn(a);
+    return { ...r, state: r.page };
+  });
+  return res.ok ? { ok: true, page: res.state, message: res.message } : res;
 }
 
 type Parsed = { error: string } | { error?: undefined; sections: Section[]; version: number };
@@ -132,6 +147,48 @@ export async function discardDraftAction(slug: string, version: unknown): Promis
     page: await discardDraft(slug as "home", v.data, a.id),
     message: "Changes thrown away.",
     audit: "page.draft.discard",
+  }));
+}
+
+// ---------- Menus & theme ----------
+
+export type DesignResult = { ok: true; state: DesignState; message: string } | { ok: false; error: string };
+
+function parseDesign(raw: unknown, version: unknown) {
+  const problem = designProblem(raw);
+  if (problem) return { error: problem } as const;
+  const v = versionSchema.safeParse(version);
+  if (!v.success) return { error: "Reload the page and try again." } as const;
+  return { design: designSchema.parse(raw), version: v.data, error: undefined } as const;
+}
+
+export async function saveDesignDraftAction(design: unknown, version: unknown): Promise<DesignResult> {
+  const p = parseDesign(design, version);
+  if (p.error !== undefined) return { ok: false, error: p.error };
+  return audited("cms.edit", "design", "store", async (a) => ({
+    state: await saveDesignDraft(p.design, p.version, a.id),
+    message: "Draft saved.",
+    audit: "design.draft.save",
+  }));
+}
+
+export async function publishDesignAction(design: unknown, version: unknown): Promise<DesignResult> {
+  const p = parseDesign(design, version);
+  if (p.error !== undefined) return { ok: false, error: p.error };
+  return audited("cms.publish", "design", "store", async (a) => {
+    const state = await publishDesign(p.design, p.version, a.id);
+    updateTag(TAGS.design);
+    return { state, message: "Published. The store shows it now.", audit: "design.publish", detail: p.design };
+  });
+}
+
+export async function discardDesignDraftAction(version: unknown): Promise<DesignResult> {
+  const v = versionSchema.safeParse(version);
+  if (!v.success) return { ok: false, error: "Reload the page and try again." };
+  return audited("cms.edit", "design", "store", async (a) => ({
+    state: await discardDesignDraft(v.data, a.id),
+    message: "Changes thrown away.",
+    audit: "design.draft.discard",
   }));
 }
 

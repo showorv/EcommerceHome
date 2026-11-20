@@ -62,6 +62,11 @@
 
 :root {
   --radius: 0.75rem;
+  /* Fonts come from lib/fonts.ts; the store theme can point these at other bundled fonts. */
+  --font-sans-latin: var(--ff-jakarta);
+  --font-heading: var(--font-sans-latin);
+  /* Bangla text (product names, SMS previews, invoices) falls back to Hind Siliguri. */
+  --font-bangla: var(--ff-hind);
 
   --background: oklch(0.99 0.003 85);
   --foreground: oklch(0.18 0.01 260);
@@ -142,6 +147,11 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading), var(--font-bangla), ui-sans-serif, system-ui, sans-serif;
   }
   :lang(bn) {
     font-family: var(--font-bangla);

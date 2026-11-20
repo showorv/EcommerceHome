@@ -168,8 +168,8 @@ export async function getDraftSections(slug: BuilderPageSlug): Promise<Section[]
 export async function getBuilderOptions() {
   await connectMongoose();
   const [cats, cols] = await Promise.all([
-    Category.find().select("name parentId").sort({ order: 1, "name.en": 1 }).lean<AnyDoc[]>(),
-    Collection.find().select("name active").sort({ "name.en": 1 }).lean<AnyDoc[]>(),
+    Category.find().select("name parentId slug active").sort({ order: 1, "name.en": 1 }).lean<AnyDoc[]>(),
+    Collection.find().select("name active slug").sort({ "name.en": 1 }).lean<AnyDoc[]>(),
   ]);
   const byId = new Map(cats.map((c) => [String(c._id), c]));
   const path = (c: AnyDoc) => {
@@ -187,5 +187,26 @@ export async function getBuilderOptions() {
       id: String(c._id),
       name: `${String(c.name?.en ?? "")}${c.active === false ? " (switched off)" : ""}`,
     })),
+    /** Visible categories in menu order, for "fill the menu from categories". */
+    categoryTree: cats
+      .filter((c) => c.active !== false)
+      .map((c) => ({
+        id: String(c._id),
+        name: String(c.name?.en ?? ""),
+        slug: String(c.slug),
+        parentId: c.parentId ? String(c.parentId) : null,
+      })),
+    /** Store pages offered as link suggestions. */
+    links: [
+      { label: "Home", href: "/" },
+      { label: "Search", href: "/search" },
+      { label: "My account", href: "/account" },
+      ...cats
+        .filter((c) => c.active !== false)
+        .map((c) => ({ label: `Category: ${path(c)}`, href: `/c/${String(c.slug)}` })),
+      ...cols
+        .filter((c) => c.active !== false)
+        .map((c) => ({ label: `Collection: ${String(c.name?.en ?? "")}`, href: `/collections/${String(c.slug)}` })),
+    ],
   };
 }

@@ -51,14 +51,14 @@ export function isSafeHref(href: string): boolean {
   if (href.startsWith("/")) return !href.startsWith("//") && !/[\s\\]/.test(href);
   return /^https:\/\/[^\s/$.?#][^\s]*$/i.test(href) || /^tel:\+?[0-9 -]{5,20}$/.test(href);
 }
-const href = z
+export const hrefField = z
   .string()
   .trim()
   .max(500)
   .default("")
   .refine(isSafeHref, "Use a store link starting with / or a link starting with https://");
 
-const image = z
+export const imageField = z
   .object({
     url: z
       .string()
@@ -78,7 +78,7 @@ const videoUrl = z
   .refine((u) => u === "" || isStoredMediaUrl(u) || youtubeId(u) !== null, "Upload a video or paste a YouTube link");
 
 /** ISO date-time or null. */
-const when = z
+export const whenField = z
   .union([z.iso.datetime({ offset: true }), z.null()])
   .default(null)
   .transform((v) => (v ? new Date(v).toISOString() : null));
@@ -86,15 +86,15 @@ const when = z
 // ---------- Section data per type ----------
 
 const heroSlide = z.object({
-  image,
-  mobileImage: image,
+  image: imageField,
+  mobileImage: imageField,
   eyebrow: text(60),
   heading: text(120),
   text: text(300),
   ctaLabel: text(30),
-  ctaHref: href,
+  ctaHref: hrefField,
   cta2Label: text(30),
-  cta2Href: href,
+  cta2Href: hrefField,
   align: z.enum(["left", "center"]).default("left"),
   theme: z.enum(["dark", "light"]).default("dark"),
 });
@@ -127,22 +127,22 @@ export const SECTION_DATA = {
       path: ["refId"],
     }),
   banner: z.object({
-    image,
-    mobileImage: image,
+    image: imageField,
+    mobileImage: imageField,
     heading: text(120),
     text: text(300),
     ctaLabel: text(30),
-    ctaHref: href,
+    ctaHref: hrefField,
     layout: z.enum(["full", "split"]).default("full"),
     theme: z.enum(["dark", "light"]).default("dark"),
   }),
   video: z.object({
     url: videoUrl.refine((u) => u !== "", "Upload a video or paste a YouTube link"),
-    poster: image,
+    poster: imageField,
     heading: text(120),
     text: text(300),
     ctaLabel: text(30),
-    ctaHref: href,
+    ctaHref: hrefField,
   }),
   usp: z.object({
     items: z
@@ -159,7 +159,7 @@ export const SECTION_DATA = {
           location: text(60),
           text: text(500).refine(Boolean, "Write what they said"),
           rating: z.coerce.number().int().min(1).max(5).default(5),
-          avatar: image,
+          avatar: imageField,
         }),
       )
       .min(1)
@@ -193,8 +193,8 @@ const common = {
   label: text(60),
   hidden: z.boolean().default(false),
   devices: z.enum(["all", "mobile", "desktop"]).default("all"),
-  startAt: when,
-  endAt: when,
+  startAt: whenField,
+  endAt: whenField,
 };
 
 const sectionOf = <T extends SectionType>(t: T) =>

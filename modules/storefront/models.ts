@@ -29,6 +29,29 @@ const pageSchema = new Schema(
   { collection: "pages", timestamps: true },
 );
 
+/**
+ * Store design (SRS §7 "navigation" + "themeSettings", kept in one document so menus and theme are
+ * previewed and published together): a draft and the published version. Validated by design.ts.
+ */
+const designVersionSchema = new Schema(
+  {
+    design: { type: Schema.Types.Mixed, default: {} },
+    at: { type: Date, required: true },
+    by: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const siteDesignSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true }, // "store"
+    draft: { type: designVersionSchema, required: true },
+    published: { type: designVersionSchema, default: null },
+    version: { type: Number, default: 0 },
+  },
+  { collection: "siteDesign", timestamps: true },
+);
+
 const newsletterSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -45,4 +68,5 @@ function model(name: string, schema: Schema): LooseModel {
 }
 
 export const Page = model("Page", pageSchema);
+export const SiteDesign = model("SiteDesign", siteDesignSchema);
 export const NewsletterSubscriber = model("NewsletterSubscriber", newsletterSchema);

@@ -95,7 +95,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
 - [x] 1.9 Search: typo tolerance + suggestions (FR-SF-08) — _built into the app (local Docker MongoDB has no Atlas Search); can move to Atlas Search / Meilisearch for a very large catalogue_
 - [x] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
-- [ ] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
+- [x] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
 - [ ] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
 - [ ] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
 - [ ] 1.14 WhatsApp / Messenger floating button (FR-SF-10)
@@ -284,6 +284,42 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1.11 — menus and theme
+
+- **Admin → Menus & theme** (new menu item, `cms.edit`) with four tabs:
+  - **Header menu:** up to 8 items, each with an optional badge ("New", "Hot"). An item can hold groups
+    (a dropdown); groups with links turn it into a full-width mega-menu, with an optional picture. "Fill
+    from my categories" builds the menu from the category tree in one click. Link fields suggest store
+    pages, categories and collections. With no menu set up, the store lists the top-level categories.
+  - **Footer:** about text, up to 4 link columns, phone / email / address, social links (Facebook,
+    Instagram, YouTube, TikTok, WhatsApp) and a line after "© shop name".
+  - **Announcement bar:** up to 3 messages that take turns, brand / dark / accent colours, optional
+    links, can be closed by shoppers (stays closed until the text changes), optional start and stop
+    times (Bangladesh time).
+  - **Theme:** brand and accent colours with live contrast checks (button text, links on light / dark
+    pages, text on the accent colour), text / heading / Bangla fonts from a curated list (all
+    self-hosted), corner style, light / dark / follow the device, animation level (full / reduced /
+    off; "reduce motion" on the shopper's device is always respected), logo with height, favicon.
+- **Draft → preview → publish**, like the page builder: "Save draft" updates the preview beside the
+  editor (the preview now shows the draft menus and theme together with the draft home page), "Publish
+  now" updates the store immediately, "Discard changes" goes back. Two people saving at once can't
+  overwrite each other. Publishing needs `cms.publish`; everything is in the audit log.
+- **How the theme works:** colours, fonts and corners are CSS variables set from the published theme,
+  so changes need no rebuild. Only checked values (hex colours, fixed font / option lists) reach the
+  page. Button text colour is picked automatically for readability, so with the default orange the
+  button text is now dark instead of white (white on that orange was below the contrast minimum).
+- **Store header:** logo or shop name, search and account in the top row, the menu in a second row on
+  tablets and computers, a slide-in menu on phones; the new footer replaces the old one-line footer.
+- Checked in the browser with temporary settings (removed afterwards): filling the menu, a group and
+  link, badge, announcement, blue brand, Poppins headings, very rounded corners, always-light mode,
+  validation message, save → preview, publish → store, audit entries, mega-menu on desktop, phone menu.
+  The theme fonts and corners were checked on a production build: the `npm run dev` server that was
+  already running kept serving an old copy of `globals.css`, so **restart your dev server** to see the
+  new header fonts. 9 new tests (104 total); lint, types, formatting and build pass.
+- Step 1.10 is committed; 1.11 is not committed yet.
+
+**Next:** Phase 1.12 — CMS pages (About, Privacy, Terms, Return & Refund, Shipping, FAQ, Contact).
 
 ### 2026-11-20 · Phase 1.10 — storefront builder
 
