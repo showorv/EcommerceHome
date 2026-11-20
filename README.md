@@ -91,7 +91,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.4 Inventory: stock per variant, low-stock threshold, movement history, purchase batches with landed cost (FR-AD-04)
 - [x] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07) — _real Add to cart comes with the cart (2.2), wishlist with 2.14_
 - [x] 1.6 Quick-view modal with shareable URL (FR-PC-04) — _Add to cart button switches on with the cart (2.2)_
-- [ ] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05)
+- [x] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05) — _Order now / Add to cart switch on with the cart and checkout (2.2, 2.3)_
 - [ ] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
 - [ ] 1.9 Search: Atlas Search with typo tolerance + suggestions (FR-SF-08)
 - [ ] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
@@ -284,6 +284,37 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1.7 — product page
+
+- **Address:** `/p/<slug>`, e.g. `/p/mini-electric-chopper-2l`, with a breadcrumb (Home › Category › Product).
+- **Gallery:** photos, uploaded videos and YouTube. On a computer, hovering magnifies the photo under the mouse
+  (2×); clicking (or the ⤢ button) opens a **full-screen viewer**: pinch, double-tap, mouse wheel or the ± buttons
+  zoom up to 4×, drag to move around, swipe or arrow keys for the next photo, Esc closes.
+- **Buying area:** labels, title (+ Bangla title), rating, price / old price / discount, stock, short description,
+  option buttons, quantity, **Order now** and **Add to cart**. Choosing an option changes price, stock and photo.
+  Both buttons are visible but switched off ("Ordering online is coming soon") until the cart and checkout exist
+  (2.2, 2.3).
+- **Phone:** once you scroll past the buttons, a bar with the product, price and "Order now" sticks to the bottom
+  of the screen; it hides again when the buttons are back in view.
+- **Description blocks** from the admin, in order: text, image, video, specifications, "What's in the box",
+  comparison table; plus the product's own specification list. Text is shown as plain text (line breaks kept),
+  never as HTML, so nothing typed in the admin can break the page.
+- **Search engines (FR-PD-08):** page title and description (SEO fields, else short description), canonical link,
+  share preview image (Open Graph), and Google "Product" + "Breadcrumb" data with price range in BDT and stock,
+  so results can show price and availability. Rating is added once reviews exist.
+- **Speed:** every Active product's page is prebuilt when the site is deployed and sent as complete HTML (no
+  loading placeholder). A product added later is built on its first visit and then cached. Saving the product in
+  the admin refreshes its page. Unknown products show a friendly "Page not found" (marked noindex).
+- Quick view and the product page now share the same price / stock / quantity parts, so they always match.
+- Category links in the breadcrumb lead to category pages, which are built next (1.8).
+- Checked in the browser (development + production build): gallery, zoom 2.25× + drag + arrow keys, lightbox
+  closes with Esc, option switching, blocks, structured data, no cost data in the page, phone layout and sticky
+  bar show/hide. 6 new SEO tests (64 total); lint, types and build pass.
+- For testing, the local test product got a short description, specifications, a category and sample description
+  blocks (text, what's in the box, comparison, YouTube video). Edit or remove them in the admin.
+
+**Next:** Phase 1.8 — category and collection pages (filters, sorting, pagination).
 
 ### 2026-11-20 · Phase 1.6 — quick-view popup
 

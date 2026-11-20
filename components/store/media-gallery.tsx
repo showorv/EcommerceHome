@@ -1,21 +1,24 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Film, MonitorPlay, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Expand, Film, MonitorPlay, Play } from "lucide-react";
 import Image from "next/image";
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { ViewMedia } from "@/modules/catalog/storefront";
+import { Lightbox } from "./lightbox";
 
 /**
  * Product gallery: one big item with arrows, swipe and arrow keys, plus a row of thumbnails.
  * Images, uploaded videos (with controls) and YouTube (loaded only when the visitor presses play,
- * through youtube-nocookie). Used by quick view now; the product page adds zoom and a lightbox (1.7).
+ * through youtube-nocookie). With `zoom` (product page): photos magnify under the mouse, and a click opens
+ * the full-screen lightbox with pinch/zoom.
  */
 export function MediaGallery({
   media,
   title,
   activeId,
   sizes = "(min-width: 768px) 450px, 100vw",
+  zoom = false,
   className,
 }: {
   media: ViewMedia[];
@@ -23,9 +26,12 @@ export function MediaGallery({
   /** Jump to this item when it changes (e.g. the picked variant's photo). */
   activeId?: string;
   sizes?: string;
+  /** Hover-zoom and full-screen lightbox (product page). */
+  zoom?: boolean;
   className?: string;
 }) {
   const [index, setIndex] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
   const [lastActive, setLastActive] = useState(activeId);
   const [playing, setPlaying] = useState<string | null>(null); // YouTube item that was started
   const touchX = useRef<number | null>(null);
@@ -83,7 +89,18 @@ export function MediaGallery({
           sizes={sizes}
           playing={playing === current.id}
           onPlay={() => setPlaying(current.id)}
+          onOpen={zoom ? () => setLightbox(true) : undefined}
         />
+        {zoom && (
+          <button
+            type="button"
+            onClick={() => setLightbox(true)}
+            className="bg-background/80 hover:bg-background absolute top-2 right-2 grid size-9 place-items-center rounded-full shadow backdrop-blur"
+            aria-label="Open full screen"
+          >
+            <Expand className="size-4" aria-hidden />
+          </button>
+        )}
         {media.length > 1 && (
           <>
             <button
@@ -109,6 +126,17 @@ export function MediaGallery({
         )}
       </div>
 
+      {zoom && (
+        <Lightbox
+          media={media}
+          index={Math.min(index, media.length - 1)}
+          onIndex={setIndex}
+          open={lightbox}
+          onOpenChange={setLightbox}
+          title={title}
+        />
+      )}
+
       {media.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1" role="list" aria-label="All photos and videos">
           {media.map((m, i) => (
@@ -133,18 +161,21 @@ export function MediaGallery({
   );
 }
 
-function Stage({
+export function Stage({
   media,
   title,
   sizes,
   playing,
   onPlay,
+  onOpen,
 }: {
   media: ViewMedia;
   title: string;
   sizes: string;
   playing: boolean;
   onPlay: () => void;
+  /** When set, photos zoom under the mouse and a click calls this (opens the lightbox). */
+  onOpen?: () => void;
 }) {
   if (media.type === "video") {
     return (
@@ -184,7 +215,7 @@ function Stage({
       </button>
     );
   }
-  return (
+  const image = (
     <Image
       src={media.url}
       alt={media.alt || title}
@@ -196,6 +227,34 @@ function Stage({
         ...(media.blur ? { backgroundImage: `url(${media.blur})`, backgroundSize: "cover" } : {}),
       }}
     />
+  );
+  return onOpen ? <HoverZoom onOpen={onOpen}>{image}</HoverZoom> : image;
+}
+
+/** Desktop magnifier: the photo scales 2× around the mouse; a click opens the lightbox. */
+function HoverZoom({ children, onOpen }: { children: ReactNode; onOpen: () => void }) {
+  const [origin, setOrigin] = useState<string | null>(null);
+  function track(e: MouseEvent<HTMLButtonElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      onMouseMove={track}
+      onMouseLeave={() => setOrigin(null)}
+      className="absolute inset-0 cursor-zoom-in overflow-hidden"
+      aria-label="Open full screen"
+      tabIndex={-1}
+    >
+      <span
+        className="absolute inset-0 transition-transform duration-200 ease-out [@media(hover:none)]:!scale-100"
+        style={{ transform: origin ? "scale(2)" : "scale(1)", transformOrigin: origin ?? "50% 50%" }}
+      >
+        {children}
+      </span>
+    </button>
   );
 }
 

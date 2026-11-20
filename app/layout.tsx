@@ -13,6 +13,8 @@ const bangla = Hind_Siliguri({
 });
 
 export const metadata: Metadata = {
+  // Makes relative image/page URLs absolute in share previews (Open Graph) and canonical links.
+  metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: { default: process.env.STORE_NAME ?? "Store", template: `%s · ${process.env.STORE_NAME ?? "Store"}` },
   description: "Kitchen, home and lifestyle gadgets imported from China, delivered across Bangladesh.",
 };

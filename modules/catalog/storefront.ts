@@ -4,7 +4,7 @@ import { connectMongoose } from "@/lib/db/mongo";
 import { TAGS } from "./cache-tags";
 import { discountPercent, stockBadge } from "./logic";
 import { blurPlaceholderUrl, videoPosterUrl } from "./media-url";
-import { Product, Variant } from "./models";
+import { Category, Product, Variant } from "./models";
 import { youtubeId } from "./schemas";
 import type { PickVariant } from "./variant-picker";
 
@@ -233,4 +233,102 @@ export async function getProductView(slug: string): Promise<ProductView | null> 
       mediaIds: ((v.mediaIds ?? []) as string[]).map(String),
     })),
   };
+}
+
+// ---------- Product page (1.7) ----------
+
+export type DetailBlock =
+  | { id: string; type: "text"; heading: string; body: string }
+  | { id: string; type: "image"; url: string; alt: string; caption: string }
+  | { id: string; type: "video"; url: string; youtubeId: string | null; caption: string }
+  | { id: string; type: "specs"; heading: string; rows: { label: string; value: string }[] }
+  | { id: string; type: "inBox"; heading: string; items: string[] }
+  | {
+      id: string;
+      type: "comparison";
+      heading: string;
+      columns: string[];
+      rows: { label: string; values: string[] }[];
+    };
+
+export type ProductDetail = ProductView & {
+  blocks: DetailBlock[];
+  specs: { label: string; value: string }[];
+  seo: { title: string; description: string; ogImage: string };
+  category: { name: string; slug: string } | null;
+};
+
+const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+function toBlock(b: AnyDoc): DetailBlock | null {
+  const d = (b.data ?? {}) as AnyDoc;
+  const id = String(b._id ?? "");
+  switch (b.type) {
+    case "text":
+      return str(d.body) ? { id, type: "text", heading: str(d.heading), body: str(d.body) } : null;
+    case "image":
+      return str(d.url) ? { id, type: "image", url: str(d.url), alt: str(d.alt), caption: str(d.caption) } : null;
+    case "video": {
+      const url = str(d.url);
+      return url ? { id, type: "video", url, youtubeId: youtubeId(url), caption: str(d.caption) } : null;
+    }
+    case "specs": {
+      const rows = ((d.rows ?? []) as AnyDoc[]).map((r) => ({ label: str(r.label), value: str(r.value) }));
+      return rows.length ? { id, type: "specs", heading: str(d.heading) || "Specifications", rows } : null;
+    }
+    case "inBox": {
+      const items = ((d.items ?? []) as unknown[]).map(str).filter(Boolean);
+      return items.length ? { id, type: "inBox", heading: str(d.heading) || "What's in the box", items } : null;
+    }
+    case "comparison": {
+      const columns = ((d.columns ?? []) as unknown[]).map(str);
+      const rows = ((d.rows ?? []) as AnyDoc[]).map((r) => ({
+        label: str(r.label),
+        values: ((r.values ?? []) as unknown[]).map(str),
+      }));
+      return columns.length >= 2 && rows.length
+        ? { id, type: "comparison", heading: str(d.heading), columns, rows }
+        : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Everything the product page shows. Builds on getProductView so quick view and the page always agree. */
+export async function getProductDetail(slug: string): Promise<ProductDetail | null> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(TAGS.catalog, TAGS.product(slug));
+  const view = await getProductView(slug);
+  if (!view) return null;
+  await connectMongoose();
+  const p = await Product.findOne({ slug, status: "active" }).select("blocks specs seo categoryIds").lean<AnyDoc>();
+  if (!p) return null;
+  const catId = ((p.categoryIds ?? []) as unknown[])[0];
+  const cat = catId ? await Category.findOne({ _id: catId, active: true }).select("name slug").lean<AnyDoc>() : null;
+  if (cat) cacheTag(TAGS.category(String(cat.slug)));
+  return {
+    ...view,
+    blocks: ((p.blocks ?? []) as AnyDoc[]).map(toBlock).filter((b): b is DetailBlock => b !== null),
+    specs: ((p.specs ?? []) as AnyDoc[])
+      .map((r) => ({ label: str(r.label), value: str(r.value) }))
+      .filter((r) => r.label || r.value),
+    seo: { title: str(p.seo?.title), description: str(p.seo?.description), ogImage: str(p.seo?.ogImage) },
+    category: cat ? { name: str(cat.name?.en), slug: str(cat.slug) } : null,
+  };
+}
+
+/** Slugs to prebuild at deploy time (newest first). Other products are built on their first visit. */
+export async function getPrebuildSlugs(limit = 200): Promise<string[]> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(TAGS.catalog);
+  await connectMongoose();
+  const docs = await Product.find({ status: "active" })
+    .select("slug")
+    .sort({ publishedAt: -1 })
+    .limit(limit)
+    .lean<AnyDoc[]>();
+  return docs.map((d) => String(d.slug));
 }
