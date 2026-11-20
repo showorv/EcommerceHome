@@ -92,8 +92,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07) — _real Add to cart comes with the cart (2.2), wishlist with 2.14_
 - [x] 1.6 Quick-view modal with shareable URL (FR-PC-04) — _Add to cart button switches on with the cart (2.2)_
 - [x] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05) — _Order now / Add to cart switch on with the cart and checkout (2.2, 2.3)_
-- [ ] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
-- [ ] 1.9 Search: Atlas Search with typo tolerance + suggestions (FR-SF-08)
+- [x] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
+- [x] 1.9 Search: typo tolerance + suggestions (FR-SF-08) — _built into the app (local Docker MongoDB has no Atlas Search); can move to Atlas Search / Meilisearch for a very large catalogue_
 - [ ] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
 - [ ] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
 - [ ] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
@@ -285,6 +285,67 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-20 · Phase 1.9 — search
+
+- **Search box in the store header** (on phones: the 🔍 button opens it under the header). Typing shows up to
+  6 matching products (photo, title, Bangla title, price) and up to 4 categories, plus "See all results".
+  Arrow keys move through the list, Enter opens the highlighted item or, with nothing highlighted, the
+  results page; Esc closes the list. Works as a plain form without JavaScript.
+- **Forgives typos and half-typed words:** "chop" finds Chopper, "chpper" / "cohpper" find Chopper,
+  "blendr jucie" finds Juice Blender (1 typo allowed in 4–6 letter words, 2 in longer ones). Bangla works
+  too ("জুস", "রাইস"). Every word must match (title, Bangla title, tags or category names); if nothing
+  matches every word, products matching all but one are shown ("rice cokr" → rice cookers).
+- **Ranking:** title matches beat tag/category matches, whole-phrase matches get a boost, then best sellers
+  and newest first.
+- **Results page** `/search?q=…`: "Best match" order plus the same filters, sorting and numbered pages as
+  category pages. No results → spelling tips, a search box and "Did you mean" categories (or all top-level
+  categories). Results pages are kept out of Google (noindex).
+- **How it works:** the searchable words of every Active product are kept in one cached list, so a search
+  never scans the database and suggestions answer fast. Saving a product or category in the admin rebuilds
+  it. **Why not Atlas Search (the SRS plan):** the local Docker MongoDB has no Atlas Search, so it couldn't
+  be developed or tested here; the built-in search behaves the same everywhere and comfortably handles
+  several thousand products. Switching to Atlas Search or Meilisearch later only touches
+  `modules/catalog/search-data.ts`.
+- Checked in the browser with 30 temporary test products (removed afterwards): suggestions for typos, word
+  starts, Bangla and categories; keyboard selection; the phone search bar; results with sorting, colour
+  filter and page 2 (links keep the search); no-results page. 9 new search tests (84 total); lint, types,
+  formatting and build pass.
+- Step 1.8 (category and collection pages) is not committed yet; it is in the same set of changes.
+
+**Next:** Phase 1.10 — storefront builder (home page sections).
+
+### 2026-11-20 · Phase 1.8 — category and collection pages
+
+- **Addresses:** `/c/<category-slug>` (e.g. `/c/kitchen-gadgets`) and `/collections/<collection-slug>`
+  (e.g. `/collections/under-1400-taka`). A category page shows products in that category and all its
+  sub-categories, with a breadcrumb (Home › Parent › Category), title (+ Bangla), description, picture and
+  links to its sub-categories. Hidden categories and collections show "Page not found".
+- **Filters:** category (sub-categories on a category page, top-level categories on a collection page, each
+  with a count), price range in taka, colour (with colour dots), in stock only, and customer rating (shown
+  once any product has reviews). Changes apply straight away; the chosen filters show as chips you can remove
+  one by one or all at once. On phones the filters open from a "Filters" button as a sheet with a
+  "Show N products" button.
+- **Sorting:** newest, best selling, price low→high / high→low, biggest discount. Hand-picked collections also
+  have "Featured" (the order set in the admin) and use the collection's own sort setting as the default.
+- **Filters are in the address**, e.g. `/c/kitchen-gadgets?colour=red&stock=1&sort=price-asc`, so a filtered
+  page can be shared or bookmarked and Back works. Wrong or old values in the address are simply ignored.
+- **More products: admin choice per category / collection** — new setting "More products on the page":
+  _Numbered pages_ (24 per page, plain links search engines can follow) or _Load as the shopper scrolls_
+  (more load automatically near the end of the list, with a "Load more" button as a fallback).
+  Loading more continues from the last product shown instead of skipping rows, so long lists stay fast.
+- **Colour filter:** products now remember the colours of their active variants (any option named Colour /
+  Color / রং). Existing products were updated with `pnpm catalog:resync`; new saves keep it up to date.
+- **Speed:** the title area of every visible category and collection is prebuilt at deploy time; the product
+  list follows the filters in the same response, from the cache. Admin saves refresh both.
+- **Search engines:** title, description (SEO fields, else the description), canonical link, share image and
+  Google "Breadcrumb" data.
+- Checked in the browser with 30 temporary test products (removed afterwards): every filter, sorting, the
+  hand-picked order, numbered pages (incl. a page number that is too high), load more to the end of the list,
+  the phone filter sheet, a price range typed the wrong way round, unknown pages (404), and bad requests to the
+  load-more address. 11 new tests (75 total); lint, types, formatting and build pass.
+- The product, category and collection pages are marked as waiting for their (cached) data on purpose, which
+  clears the Next.js "Instant" notice in development.
+
 ### 2026-11-20 · Phase 1.7 — product page
 
 - **Address:** `/p/<slug>`, e.g. `/p/mini-electric-chopper-2l`, with a breadcrumb (Home › Category › Product).
@@ -307,7 +368,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   loading placeholder). A product added later is built on its first visit and then cached. Saving the product in
   the admin refreshes its page. Unknown products show a friendly "Page not found" (marked noindex).
 - Quick view and the product page now share the same price / stock / quantity parts, so they always match.
-- Category links in the breadcrumb lead to category pages, which are built next (1.8).
+- Category links in the breadcrumb lead to category pages (added in 1.8).
 - Checked in the browser (development + production build): gallery, zoom 2.25× + drag + arrow keys, lightbox
   closes with Esc, option switching, blocks, structured data, no cost data in the page, phone layout and sticky
   bar show/hide. 6 new SEO tests (64 total); lint, types and build pass.

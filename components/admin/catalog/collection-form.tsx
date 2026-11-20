@@ -57,6 +57,7 @@ function toDraft(c: CollectionRow | null): Draft {
       rules: [],
       productIds: [],
       sort: "manual",
+      listingMode: "pagination",
       active: true,
       seo: { title: "", description: "", ogImage: "" },
     };
@@ -353,6 +354,17 @@ export function CollectionForm({
               <option value="bestselling">Best selling</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>
+            </select>
+          </Field>
+          <Field label="More products on the page" htmlFor="col-listing" className="max-w-xs">
+            <select
+              id="col-listing"
+              className={selectClass}
+              value={d.listingMode}
+              onChange={(e) => set({ listingMode: e.target.value as Draft["listingMode"] })}
+            >
+              <option value="pagination">Numbered pages</option>
+              <option value="infinite">Load as the shopper scrolls</option>
             </select>
           </Field>
         </CardContent>

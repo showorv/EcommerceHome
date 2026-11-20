@@ -20,6 +20,7 @@ export type CollectionRow = {
   rules: CollectionRule[];
   productIds: string[];
   sort: "manual" | "newest" | "price_asc" | "price_desc" | "bestselling";
+  listingMode: "pagination" | "infinite";
   active: boolean;
   seo: { title: string; description: string; ogImage: string };
 };
@@ -41,6 +42,7 @@ function toRow(c: Lean): CollectionRow {
     rules: (c.rules ?? []) as CollectionRule[],
     productIds: (c.productIds ?? []).map((p) => p.toString()),
     sort: c.sort ?? "newest",
+    listingMode: c.listingMode ?? "pagination",
     active: c.active ?? true,
     seo: { title: c.seo?.title ?? "", description: c.seo?.description ?? "", ogImage: c.seo?.ogImage ?? "" },
   };

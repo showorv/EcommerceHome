@@ -147,6 +147,30 @@ export function summariseVariants(variants: VariantSummary[]) {
   };
 }
 
+/** Colour values are compared in lower case with single spaces ("Sky  Blue" → "sky blue"). */
+export function colourKey(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Option names treated as colour for the colour filter (FR-SF-07). */
+export const COLOUR_OPTION_RE = /^(colou?r|রং|রঙ)$/i;
+
+/**
+ * Colour values offered by a product's active variants, in lower case ("Sky Blue" → "sky blue"),
+ * for the colour filter on listing pages.
+ */
+export function productColours(variants: { options: Record<string, string>; active: boolean }[]): string[] {
+  const out = new Set<string>();
+  for (const v of variants) {
+    if (!v.active) continue;
+    for (const [name, value] of Object.entries(v.options)) {
+      const key = colourKey(value);
+      if (COLOUR_OPTION_RE.test(name.trim()) && key) out.add(key.slice(0, 30));
+    }
+  }
+  return [...out].sort();
+}
+
 /** Stock badge for cards: "Sold out", or "Only N left" at or below the low-stock threshold (FR-PC-01). */
 export function stockBadge(
   available: number,

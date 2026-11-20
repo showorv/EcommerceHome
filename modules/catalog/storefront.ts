@@ -49,7 +49,7 @@ export type CardProduct = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mongoose lean docs are mapped field by field
 type AnyDoc = Record<string, any>;
 
-const CARD_FIELDS =
+export const CARD_FIELDS =
   "title slug labels media hoverMediaIndex lowStockAt ratingAvg ratingCount priceMin priceMax compareAtFrom maxDiscount totalStock inStock variantCount";
 
 function toCardMedia(m: AnyDoc): CardMedia | null {

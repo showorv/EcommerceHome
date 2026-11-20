@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { HeaderSearch, HeaderSearchFallback } from "@/components/store/header-search";
 import { QuickViewHost } from "@/components/store/quick-view";
 
 /**
@@ -12,11 +13,17 @@ export default function StoreLayout({ children }: LayoutProps<"/">) {
   return (
     <MotionProvider level="full">
       <header className="bg-background/80 sticky top-0 z-40 border-b backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="text-lg font-bold tracking-tight">
+        <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
+          <Link href="/" className="shrink-0 text-lg font-bold tracking-tight">
             {name}
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
+          <div className="flex flex-1 items-center justify-end gap-2 md:justify-center">
+            {/* Reads the address (?q= on the results page), so it renders in the browser. */}
+            <Suspense fallback={<HeaderSearchFallback />}>
+              <HeaderSearch />
+            </Suspense>
+          </div>
+          <nav className="flex shrink-0 items-center gap-4 text-sm">
             <Link href="/account" className="text-muted-foreground hover:text-foreground">
               Account
             </Link>

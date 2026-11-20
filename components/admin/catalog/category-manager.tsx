@@ -29,6 +29,7 @@ const empty: Draft = {
   description: { en: "", bn: "" },
   image: { url: "", alt: "" },
   order: 0,
+  listingMode: "pagination",
   active: true,
   seo: { title: "", description: "", ogImage: "" },
 };
@@ -58,6 +59,7 @@ export function CategoryManager({
         description: r.description,
         image: r.image,
         order: r.order,
+        listingMode: r.listingMode,
         active: r.active,
         seo: r.seo,
       },
@@ -233,6 +235,17 @@ export function CategoryManager({
               />
               <Field label="Image" htmlFor="cat-image">
                 <ImagePicker id="cat-image" value={editing.draft.image} onChange={(image) => set({ image })} />
+              </Field>
+              <Field label="More products on the page" htmlFor="cat-listing" className="max-w-xs">
+                <select
+                  id="cat-listing"
+                  className={selectClass}
+                  value={editing.draft.listingMode}
+                  onChange={(e) => set({ listingMode: e.target.value as Draft["listingMode"] })}
+                >
+                  <option value="pagination">Numbered pages</option>
+                  <option value="infinite">Load as the shopper scrolls</option>
+                </select>
               </Field>
               <label className="flex items-center gap-2 text-sm">
                 <Switch checked={editing.draft.active} onCheckedChange={(active) => set({ active })} />

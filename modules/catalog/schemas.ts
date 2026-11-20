@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BLOCK_TYPES, MEDIA_TYPES, MOVEMENT_REASONS, PRODUCT_LABELS, PRODUCT_STATUSES } from "./models";
+import { BLOCK_TYPES, LISTING_MODES, MEDIA_TYPES, MOVEMENT_REASONS, PRODUCT_LABELS, PRODUCT_STATUSES } from "./models";
 import { SLUG_RE } from "./logic";
 
 /**
@@ -56,6 +56,7 @@ export const categoryInput = z.object({
   description: i18n(500, false).default({ en: "", bn: "" }),
   image: imageRef,
   order: z.coerce.number().int().min(0).max(10_000).default(0),
+  listingMode: z.enum(LISTING_MODES).default("pagination"),
   active: z.boolean().default(true),
   seo,
 });
@@ -83,6 +84,7 @@ export const collectionInput = z
     rules: z.array(ruleInput).max(10).default([]),
     productIds: z.array(objectId).max(500).default([]),
     sort: z.enum(["manual", "newest", "price_asc", "price_desc", "bestselling"]).default("newest"),
+    listingMode: z.enum(LISTING_MODES).default("pagination"),
     active: z.boolean().default(true),
     seo,
   })

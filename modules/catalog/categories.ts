@@ -15,6 +15,7 @@ export type CategoryRow = {
   description: { en: string; bn: string };
   image: { url: string; alt: string };
   order: number;
+  listingMode: "pagination" | "infinite";
   active: boolean;
   seo: { title: string; description: string; ogImage: string };
   productCount: number;
@@ -29,6 +30,7 @@ type Lean = {
   description?: { en?: string; bn?: string };
   image?: { url?: string; alt?: string };
   order?: number;
+  listingMode?: "pagination" | "infinite";
   active?: boolean;
   seo?: { title?: string; description?: string; ogImage?: string };
 };
@@ -42,6 +44,7 @@ function toRow(c: Lean, productCount = 0, depth = 0): CategoryRow {
     description: { en: c.description?.en ?? "", bn: c.description?.bn ?? "" },
     image: { url: c.image?.url ?? "", alt: c.image?.alt ?? "" },
     order: c.order ?? 0,
+    listingMode: c.listingMode ?? "pagination",
     active: c.active ?? true,
     seo: { title: c.seo?.title ?? "", description: c.seo?.description ?? "", ogImage: c.seo?.ogImage ?? "" },
     productCount,

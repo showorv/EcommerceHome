@@ -1,7 +1,6 @@
-import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Breadcrumbs } from "@/components/store/breadcrumbs";
 import { ProductBlocks, SpecsTable } from "@/components/store/product-blocks";
 import { ProductDetail } from "@/components/store/product-detail";
 import { env } from "@/lib/env";
@@ -14,6 +13,10 @@ import { getPrebuildSlugs, getProductDetail } from "@/modules/catalog/storefront
  * are rendered on their first visit and then cached like the rest. Saving the product in the admin
  * refreshes its page.
  */
+
+// This page waits for its (cached) data before showing, so shoppers and search engines get
+// complete HTML instead of a placeholder. Telling Next.js this is intended (instant navigation check).
+export const instant = false;
 
 export async function generateStaticParams() {
   const slugs = await getPrebuildSlugs();
@@ -69,24 +72,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[slug]">) {
         dangerouslySetInnerHTML={{ __html: jsonLdString(breadcrumbJsonLd(crumbs, base)) }}
       />
 
-      <nav aria-label="Breadcrumb" className="text-muted-foreground mb-4 text-sm">
-        <ol className="flex flex-wrap items-center gap-1">
-          {crumbs.map((c, i) => (
-            <li key={c.path} className="flex min-w-0 items-center gap-1">
-              {i > 0 && <ChevronRight className="size-3.5 shrink-0" aria-hidden />}
-              {i < crumbs.length - 1 ? (
-                <Link href={c.path} className="hover:text-foreground hover:underline">
-                  {c.name}
-                </Link>
-              ) : (
-                <span aria-current="page" className="text-foreground truncate">
-                  {c.name}
-                </span>
-              )}
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <Breadcrumbs crumbs={crumbs} />
 
       <ProductDetail product={p} />
 

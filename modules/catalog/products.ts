@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import { connectMongoose } from "@/lib/db/mongo";
 import { trustFilter } from "@/lib/db/trusted-filter";
 import { CatalogError } from "./categories";
-import { slugify, summariseVariants, uniqueSlug, variantTitle } from "./logic";
+import { productColours, slugify, summariseVariants, uniqueSlug, variantTitle } from "./logic";
 import { InventoryMovement, Product, Variant } from "./models";
 import type { BlockInput, ProductInput } from "./schemas";
 
@@ -297,15 +297,7 @@ export async function saveProduct(id: string | null, input: ProductInput, actorI
       }
 
       const variants = await Variant.find({ productId }).session(session).lean<AnyDoc[]>();
-      const summary = summariseVariants(
-        variants.map((v) => ({
-          price: Number(v.price),
-          compareAtPrice: Number(v.compareAtPrice ?? 0),
-          stock: Number(v.stock ?? 0),
-          reserved: Number(v.reserved ?? 0),
-          active: v.active !== false,
-        })),
-      );
+      const summary = listingFields(variants);
       const wasPublished = before?.status === "active";
       const doc = {
         title: input.title,
@@ -338,14 +330,8 @@ export async function saveProduct(id: string | null, input: ProductInput, actorI
 }
 
 /** Recomputes price range / stock flags on the product from its variants (after stock changes). */
-export async function syncProductFromVariants(
-  productId: string | mongoose.Types.ObjectId,
-  session?: mongoose.ClientSession,
-) {
-  const pid = typeof productId === "string" ? new ObjectId(productId) : productId;
-  const q = Variant.find({ productId: pid });
-  if (session) q.session(session);
-  const variants = await q.lean<AnyDoc[]>();
+/** Product-level listing fields (price range, discount, stock, colours) from its variant documents. */
+function listingFields(variants: AnyDoc[]) {
   const summary = summariseVariants(
     variants.map((v) => ({
       price: Number(v.price),
@@ -355,7 +341,27 @@ export async function syncProductFromVariants(
       active: v.active !== false,
     })),
   );
-  await Product.updateOne({ _id: pid }, summary, { session }).setOptions({ withDeleted: true });
+  const colours = productColours(
+    variants.map((v) => {
+      const o = (v.options instanceof Map ? Object.fromEntries(v.options) : v.options) ?? {};
+      return {
+        options: Object.fromEntries(Object.entries(o as Record<string, unknown>).map(([k, val]) => [k, String(val)])),
+        active: v.active !== false,
+      };
+    }),
+  );
+  return { ...summary, colours };
+}
+
+export async function syncProductFromVariants(
+  productId: string | mongoose.Types.ObjectId,
+  session?: mongoose.ClientSession,
+) {
+  const pid = typeof productId === "string" ? new ObjectId(productId) : productId;
+  const q = Variant.find({ productId: pid });
+  if (session) q.session(session);
+  const variants = await q.lean<AnyDoc[]>();
+  await Product.updateOne({ _id: pid }, listingFields(variants), { session }).setOptions({ withDeleted: true });
   const p = await Product.findById(pid).setOptions({ withDeleted: true }).select("slug").lean<AnyDoc>();
   return p ? str(p.slug) : null;
 }

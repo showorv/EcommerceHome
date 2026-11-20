@@ -24,6 +24,9 @@ const imageRefSchema = new Schema(
   { _id: false },
 );
 
+/** How a category or collection page shows more products: numbered pages or loading as you scroll. */
+export const LISTING_MODES = ["pagination", "infinite"] as const;
+
 // ---------- Categories ----------
 
 const categorySchema = new Schema(
@@ -34,6 +37,7 @@ const categorySchema = new Schema(
     description: i18nOptional,
     image: { type: imageRefSchema, default: () => ({}) },
     order: { type: Number, default: 0 },
+    listingMode: { type: String, enum: LISTING_MODES, default: "pagination" }, // FR-SF-07: numbered pages or infinite scroll
     active: { type: Boolean, default: true },
     seo: { type: seoSchema, default: () => ({}) },
   },
@@ -67,6 +71,7 @@ const collectionSchema = new Schema(
     rules: { type: [ruleSchema], default: [] },
     productIds: { type: [Schema.Types.ObjectId], default: [] }, // manual collections, in display order
     sort: { type: String, enum: ["manual", "newest", "price_asc", "price_desc", "bestselling"], default: "newest" },
+    listingMode: { type: String, enum: LISTING_MODES, default: "pagination" },
     active: { type: Boolean, default: true },
     seo: { type: seoSchema, default: () => ({}) },
   },
@@ -133,6 +138,7 @@ const productSchema = new Schema(
     inStock: { type: Boolean, default: false },
     onSale: { type: Boolean, default: false },
     variantCount: { type: Number, default: 0 },
+    colours: { type: [String], default: [] }, // lower-case colour values of active variants (colour filter)
     publishedAt: { type: Date, default: null },
   },
   { collection: "products", timestamps: true },
@@ -141,6 +147,7 @@ productSchema.plugin(softDeletePlugin);
 productSchema.index({ status: 1, categoryIds: 1, priceMin: 1 });
 productSchema.index({ status: 1, publishedAt: -1 });
 productSchema.index({ status: 1, sortScore: -1 });
+productSchema.index({ status: 1, colours: 1 });
 productSchema.index({ "title.en": "text", "title.bn": "text", tags: "text" }); // fallback search until Atlas Search (1.9)
 
 // ---------- Variants ----------
