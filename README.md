@@ -89,8 +89,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.2 Products + variants: CRUD, duplicate, archive, per-variant price/stock/SKU/weight/images, SEO fields (FR-AD-02, FR-PD-02, FR-PD-08)
 - [x] 1.3 Product media: multiple images + videos, focal point, alt text, hover image choice — _admin side done; storefront display comes with 1.5/1.7_
 - [x] 1.4 Inventory: stock per variant, low-stock threshold, movement history, purchase batches with landed cost (FR-AD-04)
-- [x] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07) — _Quick view button opens the product page until 1.6; real Add to cart comes with the cart (2.2), wishlist with 2.14_
-- [ ] 1.6 Quick-view modal with shareable URL (FR-PC-04)
+- [x] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07) — _real Add to cart comes with the cart (2.2), wishlist with 2.14_
+- [x] 1.6 Quick-view modal with shareable URL (FR-PC-04) — _Add to cart button switches on with the cart (2.2)_
 - [ ] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05)
 - [ ] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
 - [ ] 1.9 Search: Atlas Search with typo tolerance + suggestions (FR-SF-08)
@@ -284,6 +284,31 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1.6 — quick-view popup
+
+- **Quick view** on a product card opens a popup on the same page: photo/video gallery, price, stock, short
+  description, option buttons (Colour, Size…), quantity, and "View full details".
+- **Shareable:** opening it adds `?product=<slug>` to the address (e.g. `/?product=mini-electric-chopper-2l`).
+  Sending that link opens the same page with the popup already open. The **Back** button closes it and keeps your
+  place on the page; Esc, the × and clicking outside close it too.
+- **Options:** starts on the first variant that is in stock. Sold-out choices are struck through; combinations that
+  don't exist are dashed, and choosing one jumps to the closest real variant. Price, old price, discount and stock
+  follow the choice, and the gallery jumps to that variant's photo (set "variant images" in the admin).
+  The card's "Options" button also opens quick view.
+- **Gallery** (reused by the product page in 1.7): arrows, swipe, arrow keys, thumbnails, uploaded videos with
+  controls, YouTube that loads only when the visitor presses play (privacy-friendly youtube-nocookie).
+- **Fast:** product data starts loading when the mouse moves over "Quick view", and comes from a cached public
+  endpoint (`/api/products/<slug>/view`) that is refreshed when the product is saved. It only contains what
+  shoppers may see: no cost prices, no SKUs, no exact stock beyond "available".
+- **Add to cart** is shown but switched off ("coming soon") until the cart is built in Phase 2 (2.2).
+  "View full details" goes to the product page, which is built next (1.7), so it shows "not found" until then.
+- Checked in the browser: open from the card, switch Red → Blue (price ৳1,450 → ৳1,350, photo changes), Back
+  closes, shared link opens it, Esc on a shared link closes without leaving the page, unknown product shows a
+  friendly message, phone layout fits and scrolls. 5 new tests for option picking (58 total); lint, types, build pass.
+- For testing, the local product's Red and Blue variants were linked to its two photos.
+
+**Next:** Phase 1.7 — product detail page.
 
 ### 2026-11-20 · Phase 1.5 — storefront product card + your keys checked
 

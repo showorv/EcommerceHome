@@ -4,7 +4,9 @@ import { connectMongoose } from "@/lib/db/mongo";
 import { TAGS } from "./cache-tags";
 import { discountPercent, stockBadge } from "./logic";
 import { blurPlaceholderUrl, videoPosterUrl } from "./media-url";
-import { Product } from "./models";
+import { Product, Variant } from "./models";
+import { youtubeId } from "./schemas";
+import type { PickVariant } from "./variant-picker";
 
 /**
  * Storefront reads. Everything here is public data for Active products only, cached with
@@ -133,4 +135,102 @@ export async function getCardProducts({ sort = "newest", limit = 8 }: { sort?: C
     .limit(Math.min(Math.max(limit, 1), 48))
     .lean<AnyDoc[]>();
   return docs.map(toCardProduct);
+}
+
+// ---------- Product view (quick view now, product page in 1.7) ----------
+
+export type ViewMedia = {
+  id: string;
+  type: "image" | "video" | "youtube";
+  url: string;
+  alt: string;
+  poster: string;
+  width: number;
+  height: number;
+  focalX: number;
+  focalY: number;
+  blur: string;
+  youtubeId: string | null;
+};
+
+export type ProductView = {
+  id: string;
+  slug: string;
+  title: { en: string; bn: string };
+  shortDescription: { en: string; bn: string };
+  labels: string[];
+  optionNames: string[];
+  lowStockAt: number;
+  ratingAvg: number;
+  ratingCount: number;
+  media: ViewMedia[];
+  variants: PickVariant[];
+};
+
+function toViewMedia(m: AnyDoc): ViewMedia | null {
+  const type = m.type as string;
+  if (type !== "image" && type !== "video" && type !== "youtube") return null;
+  const url = String(m.url ?? "");
+  const yt = type === "youtube" ? youtubeId(url) : null;
+  if (!url || (type === "youtube" && !yt)) return null;
+  return {
+    id: String(m._id),
+    type,
+    url,
+    alt: String(m.alt ?? ""),
+    poster: String(m.poster || (type === "video" ? videoPosterUrl(url) : "")),
+    width: Number(m.width ?? 0),
+    height: Number(m.height ?? 0),
+    focalX: Number(m.focalX ?? 50),
+    focalY: Number(m.focalY ?? 50),
+    blur: type === "youtube" ? "" : blurPlaceholderUrl(url),
+    youtubeId: yt,
+  };
+}
+
+function plainOptions(o: unknown): Record<string, string> {
+  if (!o) return {};
+  const entries = o instanceof Map ? [...o.entries()] : Object.entries(o as Record<string, unknown>);
+  return Object.fromEntries(entries.map(([k, v]) => [String(k), String(v)]));
+}
+
+/**
+ * Everything a shopper may see about one Active product, with its active variants.
+ * Public data only: no cost price, SKU-level stock is reduced to "available" (stock − reserved).
+ */
+export async function getProductView(slug: string): Promise<ProductView | null> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(TAGS.catalog, TAGS.product(slug));
+  await connectMongoose();
+  const p = await Product.findOne({ slug, status: "active" })
+    .select("title slug shortDescription labels optionNames lowStockAt ratingAvg ratingCount media")
+    .lean<AnyDoc>();
+  if (!p) return null;
+  const variants = await Variant.find({ productId: p._id, active: true })
+    .select("title options price compareAtPrice stock reserved mediaIds position")
+    .sort({ position: 1 })
+    .lean<AnyDoc[]>();
+  const sd = (p.shortDescription ?? {}) as { en?: string; bn?: string };
+  return {
+    id: String(p._id),
+    slug: String(p.slug),
+    title: { en: String(p.title?.en ?? ""), bn: String(p.title?.bn ?? "") },
+    shortDescription: { en: sd.en ?? "", bn: sd.bn ?? "" },
+    labels: ((p.labels ?? []) as string[]).map(String),
+    optionNames: ((p.optionNames ?? []) as string[]).map(String),
+    lowStockAt: Number(p.lowStockAt ?? 5),
+    ratingAvg: Number(p.ratingAvg ?? 0),
+    ratingCount: Number(p.ratingCount ?? 0),
+    media: ((p.media ?? []) as AnyDoc[]).map(toViewMedia).filter((m): m is ViewMedia => m !== null),
+    variants: variants.map((v) => ({
+      id: String(v._id),
+      title: String(v.title ?? ""),
+      options: plainOptions(v.options),
+      price: Number(v.price ?? 0),
+      compareAt: Number(v.compareAtPrice ?? 0),
+      available: Math.max(0, Number(v.stock ?? 0) - Number(v.reserved ?? 0)),
+      mediaIds: ((v.mediaIds ?? []) as string[]).map(String),
+    })),
+  };
 }

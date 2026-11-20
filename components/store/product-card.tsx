@@ -4,12 +4,14 @@ import { Eye, ShoppingBag, Star } from "lucide-react";
 import { motion, useReducedMotion, type Variants } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import { SPRING } from "@/components/motion/primitives";
 import { useMotionLevel } from "@/components/motion/motion-provider";
 import { formatTaka } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { CardMedia, CardProduct } from "@/modules/catalog/storefront";
+import { LABELS, LOUD_LABELS } from "./labels";
+import { prefetchQuickView, useOpenQuickView } from "./quick-view";
 
 /**
  * Storefront product card (FR-PC-01…03, 05, 07).
@@ -18,14 +20,6 @@ import type { CardMedia, CardProduct } from "@/modules/catalog/storefront";
  * - Touch: swipe left/right over the image to see more photos; dots show where you are.
  * - Fixed square frame + blur placeholder, so nothing jumps while images load.
  */
-
-const LABELS: Record<string, string> = {
-  new: "New",
-  hot: "Hot",
-  bestseller: "Bestseller",
-  sale: "Sale",
-  limited: "Limited",
-};
 
 const SIZES = "(min-width: 1280px) 280px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
 
@@ -48,6 +42,15 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
   const hoverMedia = media[1];
   const active = hovered || focused;
   const href = `/p/${product.slug}`;
+  const openQuickView = useOpenQuickView();
+
+  // Plain click opens the popup; Ctrl/Cmd/middle-click still opens the product page in a new tab.
+  function quickView(e: MouseEvent) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    openQuickView(product.slug);
+  }
+  const prefetch = () => prefetchQuickView(product.slug);
   const title = product.title.en;
 
   function onEnter(e: PointerEvent) {
@@ -132,7 +135,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
                 key={l}
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase shadow-sm",
-                  l === "hot" || l === "sale"
+                  LOUD_LABELS.has(l)
                     ? "bg-brand text-brand-foreground"
                     : "bg-background/90 text-foreground backdrop-blur",
                 )}
@@ -189,9 +192,12 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           animate={active ? "active" : "rest"}
           transition={reduce || level === "off" ? { duration: 0 } : SPRING}
         >
-          {/* Quick view opens a modal in step 1.6; Add to cart arrives with the cart in Phase 2 (2.2). */}
+          {/* "Options" opens quick view to choose a variant; one-click Add to cart arrives with the cart (2.2). */}
           <Link
             href={href}
+            onClick={quickView}
+            onPointerEnter={prefetch}
+            onFocus={prefetch}
             className="bg-background/95 hover:bg-background focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium shadow-md backdrop-blur focus-visible:ring-2 focus-visible:outline-none"
             aria-label={`Quick view: ${title}`}
           >
@@ -199,6 +205,8 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           </Link>
           <Link
             href={href}
+            onClick={product.inStock && product.variantCount > 1 ? quickView : undefined}
+            onPointerEnter={prefetch}
             className={cn(
               "bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none",
               !product.inStock && "bg-muted text-muted-foreground hover:bg-muted",

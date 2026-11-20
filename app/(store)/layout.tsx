@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { QuickViewHost } from "@/components/store/quick-view";
 
 /**
  * Storefront shell. Header, menus and footer become admin-editable in Phase 1 (FR-SF-02);
@@ -23,6 +25,10 @@ export default function StoreLayout({ children }: LayoutProps<"/">) {
       </header>
       <main className="flex-1">{children}</main>
       <footer className="text-muted-foreground border-t py-8 text-center text-sm">© {name}</footer>
+      {/* Reads ?product= from the URL, so it renders in the browser only (the page itself stays static). */}
+      <Suspense fallback={null}>
+        <QuickViewHost />
+      </Suspense>
     </MotionProvider>
   );
 }
