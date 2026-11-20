@@ -89,7 +89,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.2 Products + variants: CRUD, duplicate, archive, per-variant price/stock/SKU/weight/images, SEO fields (FR-AD-02, FR-PD-02, FR-PD-08)
 - [x] 1.3 Product media: multiple images + videos, focal point, alt text, hover image choice — _admin side done; storefront display comes with 1.5/1.7_
 - [x] 1.4 Inventory: stock per variant, low-stock threshold, movement history, purchase batches with landed cost (FR-AD-04)
-- [ ] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07)
+- [x] 1.5 Product card: hover image swap, pop/lift with action bar, labels, stock badge, no layout shift (FR-PC-01…03, 07) — _Quick view button opens the product page until 1.6; real Add to cart comes with the cart (2.2), wishlist with 2.14_
 - [ ] 1.6 Quick-view modal with shareable URL (FR-PC-04)
 - [ ] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05)
 - [ ] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
@@ -284,6 +284,50 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1.5 — storefront product card + your keys checked
+
+**Your settings (checked without sending email or uploading files):**
+
+- **Google sign-in: working.** The "Continue with Google" button shows and sends people to Google with the right
+  return address (`/api/auth/callback/google`).
+- **Gmail: working.** Gmail accepted the login. Emails go to real inboxes now, not Mailpit. Emails are sent by the
+  background worker, so keep `pnpm worker` running next to `pnpm dev`.
+- **Cloudinary: working.** At first the key could read but not upload ("missing permissions (create)"); after you
+  gave it full access, a test upload went through (test file deleted again). The admin now shows Cloudinary's actual
+  reason if an upload is ever refused.
+- If sign-in ever fails with a 500 error, check that **Docker Desktop** is running: MongoDB, Redis and Mailpit run
+  inside it (`pnpm services:up`).
+
+**Product card (1.5):**
+
+- Shows photo, name, price ("From ৳…" when variants differ), struck-through old price, discount badge, rating
+  (once reviews exist), labels (New, Hot, Bestseller…) and a stock badge ("Only 3 left" at the product's low-stock
+  level, "Sold out").
+- Discount is honest: the struck price is the cheapest variant's own old price. If only some variants are
+  discounted, the badge says "Up to −19%" instead.
+- Computer: on hover the second photo (the one chosen as "hover image" in the admin) fades in, or a muted video plays
+  if "autoplay on hover" is set. The card lifts with a spring and a bar slides up with Quick view and Buy now /
+  Options. Keyboard focus shows the same bar.
+- Phone: swipe over the photo to see more photos, with dots below.
+- No jumping while loading: fixed square frame, blurred preview for Cloudinary images, lazy loading, responsive
+  sizes. Motion follows the visitor's "reduce motion" setting.
+- The home page "New arrivals" now shows real Active products (newest 8) instead of the fake samples. It is a static
+  page refreshed every hour, and immediately when a product is saved in the admin.
+- Checked: desktop hover swap + lift + action bar, phone layout (2 columns, no sideways scroll), swipe, no console
+  errors; discount badge contrast raised to pass accessibility (white on darker red).
+
+**Also changed:**
+
+- The admin pages no longer print the "uncached data during prerendering" development error.
+- CI now starts a MongoDB container before `pnpm build`, because the home page reads products while it is built.
+- New command `pnpm catalog:resync`: recalculates every product's price/discount/stock summary. Already run once.
+- Your local test product "Mini Electric Chopper 2L" is now Active with the two test photos, so the card can be seen.
+  Change or archive it in the admin any time.
+
+**You need to:** run `pnpm worker` alongside `pnpm dev` so emails are sent.
+
+**Next:** Phase 1.6 — quick-view popup.
 
 ### 2026-11-20 · Phase 1 — admin catalogue built (steps 1.1–1.4)
 

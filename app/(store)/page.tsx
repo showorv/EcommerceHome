@@ -1,19 +1,15 @@
-import { Lift, Reveal, Stagger, StaggerItem } from "@/components/motion/primitives";
+import { Reveal } from "@/components/motion/primitives";
+import { ProductGrid } from "@/components/store/product-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getCardProducts } from "@/modules/catalog/storefront";
 
 /**
- * Temporary home page that shows the design system and motion primitives.
- * Phase 1 replaces it with sections managed from the admin storefront builder (FR-SF-01).
+ * Temporary home page. Step 1.10 replaces it with sections managed from the admin storefront builder
+ * (FR-SF-01); the product grid below is the same component those sections will use.
  */
-const SAMPLE = [
-  { name: "Electric milk frother", price: "৳650", was: "৳900", label: "Hot" },
-  { name: "Silicone spatula set", price: "৳480", was: "৳600", label: "New" },
-  { name: "Mini vacuum sealer", price: "৳1,250", was: "৳1,600", label: "Bestseller" },
-  { name: "LED motion sensor light", price: "৳390", was: "৳550", label: "New" },
-];
-
-export default function HomePage() {
+export default async function HomePage() {
+  const products = await getCardProducts({ sort: "newest", limit: 8 });
   return (
     <>
       <section className="relative overflow-hidden">
@@ -43,26 +39,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pb-24">
+      <section className="mx-auto max-w-6xl px-4 pb-24" aria-labelledby="new-arrivals">
         <Reveal>
-          <h2 className="mb-6 text-2xl font-bold tracking-tight">Design system preview</h2>
+          <h2 id="new-arrivals" className="mb-6 text-2xl font-bold tracking-tight">
+            New arrivals
+          </h2>
         </Reveal>
-        <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {SAMPLE.map((p) => (
-            <StaggerItem key={p.name}>
-              <Lift className="group bg-card rounded-xl border p-3 shadow-sm transition-shadow hover:shadow-xl">
-                <div className="from-accent to-secondary relative mb-3 aspect-square rounded-lg bg-gradient-to-br">
-                  <Badge className="bg-brand text-brand-foreground absolute top-2 left-2">{p.label}</Badge>
-                </div>
-                <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
-                <p className="mt-1 text-sm">
-                  <span className="font-bold">{p.price}</span>{" "}
-                  <span className="text-muted-foreground line-through">{p.was}</span>
-                </p>
-              </Lift>
-            </StaggerItem>
-          ))}
-        </Stagger>
+        {products.length > 0 ? (
+          <ProductGrid products={products} />
+        ) : (
+          <p className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
+            Products appear here as soon as they are set to Active in the admin.
+          </p>
+        )}
       </section>
     </>
   );

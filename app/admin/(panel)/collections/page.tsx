@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireStaff } from "@/modules/auth/session";
 import { listCollections } from "@/modules/catalog/collections";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 export default async function CollectionsPage() {
   const { permissions } = await requireStaff("products.view");
   const rows = await listCollections();

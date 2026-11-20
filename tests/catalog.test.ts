@@ -8,6 +8,7 @@ import {
   rulesToFilter,
   slugify,
   suggestSku,
+  stockBadge,
   summariseVariants,
   uniqueSlug,
   variantCombinations,
@@ -15,6 +16,7 @@ import {
   weightedAverageCost,
   type CollectionRule,
 } from "@/modules/catalog/logic";
+import { blurPlaceholderUrl, cloudinaryTransform, videoPosterUrl } from "@/modules/catalog/media-url";
 import { productInput, youtubeId } from "@/modules/catalog/schemas";
 
 describe("slugs", () => {
@@ -187,5 +189,37 @@ describe("product validation", () => {
     expect(youtubeId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
     expect(youtubeId("https://youtu.be/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
     expect(youtubeId("https://vimeo.com/123")).toBeNull();
+  });
+});
+
+describe("storefront card data", () => {
+  it("strikes through the cheapest variant's own compare-at price", () => {
+    const s = summariseVariants([
+      { price: 145_000, compareAtPrice: 180_000, stock: 10, reserved: 0, active: true },
+      { price: 135_000, compareAtPrice: 0, stock: 4, reserved: 0, active: true },
+    ]);
+    // Cheapest variant has no compare-at, so the card must not show "−25%" next to ৳1,350.
+    expect(s).toMatchObject({ priceMin: 135_000, compareAtFrom: 0, maxDiscount: 19 });
+  });
+
+  it("shows stock badges at the threshold", () => {
+    expect(stockBadge(0, 5)).toEqual({ kind: "soldOut" });
+    expect(stockBadge(3, 5)).toEqual({ kind: "low", left: 3 });
+    expect(stockBadge(5, 5)).toEqual({ kind: "low", left: 5 });
+    expect(stockBadge(6, 5)).toBeNull();
+    expect(stockBadge(2, 0)).toBeNull(); // threshold 0 = never warn
+  });
+
+  it("builds Cloudinary blur and poster URLs, leaves local files alone", () => {
+    const img = "https://res.cloudinary.com/demo/image/upload/v1/store/images/a.jpg";
+    const vid = "https://res.cloudinary.com/demo/video/upload/v1/store/videos/b.mp4";
+    expect(blurPlaceholderUrl(img)).toBe(
+      "https://res.cloudinary.com/demo/image/upload/w_24,q_30,e_blur:400,f_auto/v1/store/images/a.jpg",
+    );
+    expect(videoPosterUrl(vid)).toBe("https://res.cloudinary.com/demo/video/upload/so_0,f_jpg/v1/store/videos/b.jpg");
+    expect(blurPlaceholderUrl("/uploads/images/x.webp")).toBe("");
+    expect(cloudinaryTransform("https://evil.example/image/upload/a.jpg", "w_1")).toBe(
+      "https://evil.example/image/upload/a.jpg",
+    );
   });
 });

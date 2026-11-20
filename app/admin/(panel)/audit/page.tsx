@@ -7,6 +7,9 @@ import { connectMongoose } from "@/lib/db/mongo";
 import { AuditLogModel } from "@/modules/audit/audit-log.model";
 import { requireStaff } from "@/modules/auth/session";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 const PAGE_SIZE = 50;
 
 /** Audit log viewer (FR-AD-10). Cursor pagination by _id, newest first (NFR-SC-06). */

@@ -58,8 +58,17 @@ export async function uploadMedia(file: File): Promise<Uploaded> {
   body.set("signature", signed.signature);
   for (const [k, v] of Object.entries(signed.params)) body.set(k, String(v));
   const res = await fetch(signed.uploadUrl, { method: "POST", body });
-  const json = (await res.json().catch(() => ({}))) as { secure_url?: string; width?: number; height?: number };
-  if (!res.ok || !json.secure_url) throw new Error("Upload to Cloudinary failed");
+  const json = (await res.json().catch(() => ({}))) as {
+    secure_url?: string;
+    width?: number;
+    height?: number;
+    error?: { message?: string };
+  };
+  if (!res.ok || !json.secure_url) {
+    // Show Cloudinary's reason (e.g. an API key without upload permission) instead of a generic message.
+    const reason = json.error?.message?.replace(/^\[[^\]]*\]\s*/, "");
+    throw new Error(reason ? `Cloudinary refused the upload: ${reason}` : "Upload to Cloudinary failed");
+  }
   return { url: json.secure_url, kind, width: json.width ?? size.width, height: json.height ?? size.height };
 }
 

@@ -127,6 +127,8 @@ const productSchema = new Schema(
     priceMin: { type: Number, default: 0 },
     priceMax: { type: Number, default: 0 },
     compareAtMax: { type: Number, default: 0 },
+    compareAtFrom: { type: Number, default: 0 }, // compare-at price of the cheapest variant (card "was" price)
+    maxDiscount: { type: Number, default: 0, index: true }, // biggest % off across variants (sorting/filters)
     totalStock: { type: Number, default: 0 },
     inStock: { type: Boolean, default: false },
     onSale: { type: Boolean, default: false },

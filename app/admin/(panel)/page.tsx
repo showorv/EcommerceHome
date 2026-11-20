@@ -2,6 +2,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireStaff } from "@/modules/auth/session";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 /** Dashboard placeholder. Order and revenue widgets arrive with Phase 2 (FR-AD-01). */
 export default async function AdminDashboardPage() {
   const { user, permissions } = await requireStaff();

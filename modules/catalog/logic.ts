@@ -117,20 +117,44 @@ export type VariantSummary = {
 export function summariseVariants(variants: VariantSummary[]) {
   const live = variants.filter((v) => v.active);
   if (live.length === 0) {
-    return { priceMin: 0, priceMax: 0, compareAtMax: 0, totalStock: 0, inStock: false, onSale: false, variantCount: 0 };
+    return {
+      priceMin: 0,
+      priceMax: 0,
+      compareAtMax: 0,
+      compareAtFrom: 0,
+      maxDiscount: 0,
+      totalStock: 0,
+      inStock: false,
+      onSale: false,
+      variantCount: 0,
+    };
   }
   const prices = live.map((v) => v.price);
+  const priceMin = Math.min(...prices);
   const available = live.map((v) => Math.max(0, v.stock - v.reserved));
   const totalStock = available.reduce((a, b) => a + b, 0);
   return {
-    priceMin: Math.min(...prices),
+    priceMin,
     priceMax: Math.max(...prices),
     compareAtMax: Math.max(...live.map((v) => v.compareAtPrice)),
+    // The card shows "৳price  ̶৳compareAt" for the cheapest variant, so the struck price must be that variant's own.
+    compareAtFrom: Math.max(...live.filter((v) => v.price === priceMin).map((v) => v.compareAtPrice)),
+    maxDiscount: Math.max(...live.map((v) => discountPercent(v.price, v.compareAtPrice))),
     totalStock,
     inStock: totalStock > 0,
     onSale: live.some((v) => v.compareAtPrice > v.price),
     variantCount: live.length,
   };
+}
+
+/** Stock badge for cards: "Sold out", or "Only N left" at or below the low-stock threshold (FR-PC-01). */
+export function stockBadge(
+  available: number,
+  lowStockAt: number,
+): { kind: "soldOut" } | { kind: "low"; left: number } | null {
+  if (available <= 0) return { kind: "soldOut" };
+  if (lowStockAt > 0 && available <= lowStockAt) return { kind: "low", left: available };
+  return null;
 }
 
 /** "−25%" badge value; 0 when there is no real discount. */

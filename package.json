@@ -17,6 +17,7 @@
     "services:up": "docker compose up -d",
     "services:down": "docker compose down",
     "owner:create": "tsx scripts/create-owner.ts",
+    "catalog:resync": "tsx --conditions=react-server scripts/resync-catalog.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

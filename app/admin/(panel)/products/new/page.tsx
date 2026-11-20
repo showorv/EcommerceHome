@@ -4,6 +4,9 @@ import { ProductForm } from "@/components/admin/catalog/product-form";
 import { requireStaff } from "@/modules/auth/session";
 import { listCategories } from "@/modules/catalog/categories";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 export default async function NewProductPage() {
   await requireStaff("products.edit");
   const categories = await listCategories();
