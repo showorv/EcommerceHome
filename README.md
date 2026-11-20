@@ -94,7 +94,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.7 Product detail page: gallery with video, zoom, lightbox, variant picker, rich description blocks, sticky mobile add-to-cart (FR-PD-01…03, 05) — _Order now / Add to cart switch on with the cart and checkout (2.2, 2.3)_
 - [x] 1.8 Category / collection pages: filters, sorting, pagination or infinite scroll (FR-SF-07)
 - [x] 1.9 Search: typo tolerance + suggestions (FR-SF-08) — _built into the app (local Docker MongoDB has no Atlas Search); can move to Atlas Search / Meilisearch for a very large catalogue_
-- [ ] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
+- [x] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
 - [ ] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
 - [ ] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
 - [ ] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
@@ -284,6 +284,39 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-20 · Phase 1.10 — storefront builder
+
+- **Admin → Storefront** builds the home page from sections: Hero / slider (up to 6 slides, separate
+  phone picture, two buttons, autoplay), Category grid (tiles or round icons), Products (newest, best
+  sellers, biggest discounts, a collection or a category; sliding row or grid), Promo banner, Video
+  banner (uploaded video playing muted on a loop, or YouTube that loads only when tapped), Why buy from
+  us, Testimonials, FAQ (also tells Google it is an FAQ), Newsletter sign-up and Text. "Featured
+  collection" is a ready-made Products section.
+- **Editing:** add, duplicate, delete (with Undo), reorder by dragging or with the arrow buttons, hide /
+  show, and per section: phones only / computers only, start and stop dates (Bangladesh time). Problems
+  (missing video link, picture from another website, unsafe button link) are flagged on the section
+  before saving. All text is plain text, so nothing typed can break or hack the store.
+- **Draft → preview → publish:** changes stay in a draft until published. "Save draft" updates the live
+  preview beside the editor (computer or phone size, or open it in a new tab); the store doesn't change.
+  "Publish now" shows it to shoppers straight away; "Schedule…" makes it go live at a set time (the
+  current version stays until then; cancel any time); "Discard changes" goes back to the live version.
+  If two people edit at once, the second save is refused with a "reload" message instead of overwriting.
+- **Who can do what:** `cms.edit` (managers, owner) edits and saves drafts; `cms.publish` publishes and
+  schedules. Every save / publish / schedule is in the audit log.
+- **Store side:** the home page is now built from the published sections (before the first publish it
+  shows a starter layout: hero, new arrivals, why buy from us). It stays a fast prerendered page; it
+  refreshes the moment you publish, and by itself when a scheduled version or a section's start / stop
+  time comes (the first visitor after that moment triggers the refresh).
+- **Newsletter:** sign-ups are stored (email only, limited to 5 per hour per visitor, bots filtered).
+  Sending newsletters comes with marketing in a later phase.
+- Checked in the browser (temporary data removed afterwards): editing, adding slides and sections, hide,
+  reorder, validation, save → preview, publish → store, schedule → went live on time, the two-editors
+  guard, newsletter sign-up, YouTube block, phone layout. 11 new tests (95 total); lint, types,
+  formatting and build pass.
+- Steps 1.8–1.9 are committed and pushed; 1.10 is not committed yet.
+
+**Next:** Phase 1.11 — navigation and theme.
 
 ### 2026-11-20 · Phase 1.9 — search
 

@@ -15,7 +15,8 @@ function join(directives: Record<string, string[]>): string {
     .join("; ");
 }
 
-export function storefrontCsp(isDev: boolean, https = !isDev): string {
+/** `framedBySelf`: the builder's draft preview, shown in a frame inside the admin. */
+export function storefrontCsp(isDev: boolean, https = !isDev, framedBySelf = false): string {
   return join({
     "default-src": ["'self'"],
     "script-src": ["'self'", "'unsafe-inline'", ...(isDev ? ["'unsafe-eval'"] : [])],
@@ -28,7 +29,7 @@ export function storefrontCsp(isDev: boolean, https = !isDev): string {
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
-    "frame-ancestors": ["'none'"],
+    "frame-ancestors": [framedBySelf ? "'self'" : "'none'"],
     ...(https ? { "upgrade-insecure-requests": [] } : {}),
   });
 }
@@ -43,7 +44,7 @@ export function adminCsp(nonce: string, isDev: boolean, https = !isDev): string 
     "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
     "font-src": ["'self'"],
     "connect-src": ["'self'", "https://api.cloudinary.com", ...(isDev ? ["ws:"] : [])],
-    "frame-src": ["'none'"],
+    "frame-src": ["'self'"], // the storefront builder's draft preview
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

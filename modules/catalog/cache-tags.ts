@@ -9,4 +9,5 @@ export const TAGS = {
   category: (slug: string) => `category:${slug}`,
   collection: (slug: string) => `collection:${slug}`,
   navigation: "navigation",
+  page: (slug: string) => `page:${slug}`, // storefront builder pages (home…)
 } as const;

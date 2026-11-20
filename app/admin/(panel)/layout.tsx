@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/collections", label: "Collections" },
   { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/storefront", label: "Storefront" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/system", label: "Jobs & system" },
