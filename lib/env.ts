@@ -42,6 +42,14 @@ const schema = z.object({
   CLOUDINARY_API_KEY: optional,
   CLOUDINARY_API_SECRET: optional,
 
+  /**
+   * Lets scripts and the worker refresh store pages through POST /api/internal/revalidate (NFR-SC-02).
+   * Unset = that endpoint is switched off. At least 32 random characters.
+   */
+  REVALIDATE_SECRET: optional.refine((v) => v === undefined || v.length >= 32, {
+    message: "REVALIDATE_SECRET must be at least 32 characters",
+  }),
+
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 });
 

@@ -99,7 +99,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
 - [x] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
 - [x] 1.14 WhatsApp / Messenger floating button (FR-SF-10)
-- [ ] 1.15 ISR + on-demand revalidation when admin saves content (NFR-SC-02)
+- [x] 1.15 ISR + on-demand revalidation when admin saves content (NFR-SC-02)
 
 **Done when:** a manager adds a product with 6 images + 2 videos and sees it live within 1 minute without redeploy, and can rearrange home-page sections with preview.
 
@@ -284,6 +284,35 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-21 · Phase 1.15 — ISR + on-demand revalidation
+
+- Store pages are built once and kept (product pages fully, category / collection / search pages as a
+  kept frame with the product list filled in per visit). Saving in the admin now rebuilds **only the
+  pages the change affects**:
+  - **Product** (save, status, stock, purchase batch, delete): its page (old and new address), its
+    categories and every category above them, the collections that hand-pick it or pick by rules, the
+    home page rows and search. Other products' pages stay as they are.
+  - **Category / collection:** its own page, plus menus and filters.
+  - **Builder pages, menus & theme, CMS pages:** the page itself (as before).
+- Right after a save, the server visits each affected page once (product pages first, at most 30), so
+  the first shopper gets the new page, not the old copy a cached page would otherwise hand out while it
+  rebuilds. Pages over that limit rebuild on their first visit.
+- **For scripts and the worker:** `POST /api/internal/revalidate` with the header
+  `Authorization: Bearer <secret>` and a body like `{"tags": ["product:x"]}` refreshes those pages.
+  The secret is `REVALIDATE_SECRET`; without it the endpoint is off (404). Only known store tags are
+  accepted. `pnpm catalog:resync` now uses it; orders will use it in Phase 2 when stock changes.
+- Checked on a production build with two temporary products in two temporary categories (removed
+  afterwards, with their audit entries): saving A in the admin updated A's page, A's category and
+  search; B's page and category kept their cached copy although B had changed in the database. The
+  first visit after the save got the new page. The endpoint rejects a missing or wrong secret, unknown
+  tags and bad JSON. 6 new tests (131 total); lint, types, formatting and build pass.
+- **You need to (optional):** add `REVALIDATE_SECRET` to `.env.local` (32+ random characters; make
+  one with `openssl rand -hex 24`) so `pnpm catalog:resync` can refresh the store. Before running
+  several copies of the store in production, they will need a shared cache (noted for deployment).
+- Committed.
+
+**Next:** Phase 2.1 — locations (division / district / area) and delivery zones with charge rules.
 
 ### 2026-11-21 · Phase 1.14 — WhatsApp / Messenger chat button
 

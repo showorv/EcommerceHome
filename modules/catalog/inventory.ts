@@ -108,6 +108,7 @@ export async function adjustStock(
     stockBefore: Number(updated.stock) - input.change,
     stockAfter: Number(updated.stock),
     slug,
+    productId: String(updated.productId),
   };
 }
 
@@ -246,7 +247,8 @@ export async function recordPurchaseBatch(input: PurchaseBatchInput, actorId: st
       .select("slug")
       .lean<AnyDoc[]>()
   ).map((p) => String(p.slug));
-  return { batchId, batchNo, goodsTotal, landedTotal: goodsTotal + extra, items, slugs };
+  const productIds = [...new Set(items.map((i) => String(i.productId)))];
+  return { batchId, batchNo, goodsTotal, landedTotal: goodsTotal + extra, items, slugs, productIds };
 }
 
 export type BatchRow = {

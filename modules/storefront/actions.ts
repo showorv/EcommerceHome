@@ -1,6 +1,5 @@
 "use server";
 
-import { updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { connectMongoose } from "@/lib/db/mongo";
@@ -11,6 +10,7 @@ import { writeAudit } from "@/modules/audit/audit";
 import type { Permission } from "@/modules/auth/rbac";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { TAGS } from "@/modules/catalog/cache-tags";
+import { refreshTags } from "@/modules/catalog/store-refresh";
 import { designProblem, designSchema } from "./design";
 import { discardDesignDraft, publishDesign, saveDesignDraft, type DesignState } from "./design-data";
 import { NewsletterSubscriber } from "./models";
@@ -103,7 +103,7 @@ export async function publishAction(slug: string, sections: unknown, version: un
   if (p.error !== undefined) return { ok: false, error: p.error };
   return guarded("cms.publish", slug, async (a) => {
     const page = await publishNow(slug as "home", p.sections, p.version, a.id);
-    updateTag(TAGS.page(slug));
+    refreshTags([TAGS.page(slug)]);
     return {
       page,
       message: "Published. The store shows it now.",
@@ -125,7 +125,7 @@ export async function scheduleAction(
   if (!iso) return { ok: false, error: "Pick a date and time." };
   return guarded("cms.publish", slug, async (a) => {
     const page = await schedulePublish(slug as "home", p.sections, new Date(iso), p.version, a.id);
-    updateTag(TAGS.page(slug));
+    refreshTags([TAGS.page(slug)]);
     return { page, message: "Scheduled.", audit: "page.schedule", detail: { at: iso, sections: p.sections } };
   });
 }
@@ -135,7 +135,7 @@ export async function cancelScheduleAction(slug: string, version: unknown): Prom
   if (!v.success) return { ok: false, error: "Reload the page and try again." };
   return guarded("cms.publish", slug, async () => {
     const page = await cancelSchedule(slug as "home", v.data);
-    updateTag(TAGS.page(slug));
+    refreshTags([TAGS.page(slug)]);
     return { page, message: "Schedule cancelled.", audit: "page.schedule.cancel" };
   });
 }
@@ -177,7 +177,7 @@ export async function publishDesignAction(design: unknown, version: unknown): Pr
   if (p.error !== undefined) return { ok: false, error: p.error };
   return audited("cms.publish", "design", "store", async (a) => {
     const state = await publishDesign(p.design, p.version, a.id);
-    updateTag(TAGS.design);
+    refreshTags([TAGS.design]);
     return { state, message: "Published. The store shows it now.", audit: "design.publish", detail: p.design };
   });
 }

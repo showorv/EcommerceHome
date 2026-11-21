@@ -1,7 +1,6 @@
 "use server";
 
 import { isValidObjectId } from "mongoose";
-import { updateTag } from "next/cache";
 import { z } from "zod";
 import { connectMongoose } from "@/lib/db/mongo";
 import { logger } from "@/lib/logger";
@@ -11,6 +10,7 @@ import { writeAudit } from "@/modules/audit/audit";
 import type { Permission } from "@/modules/auth/rbac";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { TAGS } from "@/modules/catalog/cache-tags";
+import { refreshTags } from "@/modules/catalog/store-refresh";
 import { cmsContentInput, contactInput, type CmsContent } from "./blocks";
 import { ContactMessage } from "./models";
 import {
@@ -101,9 +101,7 @@ export async function publishCmsPageAction(id: string, raw: unknown, version: un
   if (p.error !== undefined) return { ok: false, error: p.error };
   return audited("cms.publish", id, async (a) => {
     const { page, previousSlug } = await publish(id, p.content, p.version, a.id);
-    updateTag(TAGS.cmsPage(page.slug));
-    if (previousSlug !== page.slug) updateTag(TAGS.cmsPage(previousSlug));
-    updateTag(TAGS.cmsPages);
+    refreshTags([TAGS.cmsPage(page.slug), TAGS.cmsPage(previousSlug), TAGS.cmsPages]);
     return {
       page,
       message: `Published. The store shows it at /pages/${page.slug}.`,
@@ -119,8 +117,7 @@ export async function unpublishCmsPageAction(id: string, version: unknown): Prom
   if (!v.success) return { ok: false, error: "Reload the page and try again." };
   return audited("cms.publish", id, async () => {
     const page = await unpublish(id, v.data);
-    updateTag(TAGS.cmsPage(page.slug));
-    updateTag(TAGS.cmsPages);
+    refreshTags([TAGS.cmsPage(page.slug), TAGS.cmsPages]);
     return { page, message: "Taken off the store. The draft is kept.", audit: "cms.page.unpublish" };
   });
 }
@@ -143,8 +140,7 @@ export async function deleteCmsPageAction(id: string, version: unknown): Promise
   return audited("cms.publish", id, async () => {
     const page = await deletePage(id, v.data);
     if (page.published) {
-      updateTag(TAGS.cmsPage(page.slug));
-      updateTag(TAGS.cmsPages);
+      refreshTags([TAGS.cmsPage(page.slug), TAGS.cmsPages]);
     }
     // The audit entry keeps a full copy, so a deleted page can be rebuilt if needed.
     return { page, message: "Page deleted.", audit: "cms.page.delete", before: page, detail: { deleted: true } };
