@@ -107,7 +107,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 - [x] 2.1 Locations (division/district/area) seed data + delivery zones and charge rules in admin (FR-AD-08)
 - [x] 2.2 Cart: drawer + page, guest persistence, merge on sign-in (FR-CO-01)
-- [ ] 2.3 Checkout form with live totals and zone/weight delivery charge (FR-CO-02, SRS §2.2–2.3)
+- [x] 2.3 Checkout form with live totals and zone/weight delivery charge (FR-CO-02, SRS §2.2–2.3)
 - [ ] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
 - [ ] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
 - [ ] 2.6 Coupons (FR-CO-04)
@@ -285,6 +285,47 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-21 · Phase 2.3 — Checkout form with live totals
+
+- New **checkout page** (`/checkout`), reached from the cart drawer, the cart page and **Order now** on a
+  product page. One page with the form from SRS §2.2:
+  - **Your details:** full name, mobile number (any Bangladeshi format, saved as +8801…), and email
+    (optional for guests, required when signed in)
+  - **Delivery address:** district → area (from Admin → Delivery), the full address, and a delivery
+    note
+  - **Payment:** only the options the area's zone allows. Normally **Cash on delivery** or **Pay
+    everything now**; for a zone set to "delivery charge in advance", **Delivery charge now, rest on
+    delivery** or pay everything now.
+  - **Accept terms and return policy**, linking to your Terms and Returns pages
+- **The order summary updates as you type:** products, subtotal, delivery for the chosen area (with
+  "Free delivery from ৳…" or what a free/campaign rule saves), the COD fee, the total, **pay now** and
+  **pay at the door**, plus the delivery time.
+- Signed-in customers get their name, email and phone filled in. What a shopper typed is kept in the
+  browser and comes back if they leave and return.
+- **The server checks everything again** when the form is sent: each field, the saved cart at today's
+  prices and stock, that the area belongs to the district and is delivered to, that the payment option
+  is allowed, and every amount, worked out from scratch. If the total has changed since the page
+  opened (a price or a delivery charge was edited), the shopper sees the new total and checks again.
+  Order placement (2.7) will save what this check returns.
+- **Not yet:** the **Place order** button only checks the order for now and says so. The phone code
+  (2.4), the bKash/Nagad numbers and TrxID (2.5), coupons (2.6) and saving the order (2.7) come next.
+- Checked in the browser:
+  - Order now went to checkout with the account's name and email filled in.
+  - An empty form showed a message at each field and put the cursor in the first one.
+  - Dhanmondi gave ৳70 (total ৳1,520) and the server agreed.
+  - Outside Dhaka, set for the test to "delivery charge in advance" with a 1% COD fee, offered only the
+    two advance options: ৳130 now, ৳1,465 at the door, a ৳15 fee.
+  - Raising the zone's charge in another tab made the stale page show "The total changed to ৳1,605"
+    and refresh its numbers.
+  - Phone size works.
+- The zone was set back, and the test's cart, browser draft and audit entries were removed. **A
+  slip:** my first cleanup also deleted the cart of your own owner account (1 × Red chopper, added at
+  14:54 in another browser). I put it back exactly from the database's change log. 10 new tests (163
+  total); lint, types, formatting and build pass.
+- Committed.
+
+**Next:** Phase 2.4 — SMS provider and phone OTP at checkout.
+
 ### 2026-11-21 · Phase 2.2 — Cart
 
 - **Add to cart works everywhere:** on the product page, in quick view, and on product cards. A card
@@ -312,8 +353,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - The test carts and the sign-in audit entry from the test were removed afterwards. The chopper's
   stock didn't change. 8 new tests (153 total); lint, types, formatting and build pass.
 - Committed.
-
-**Next:** Phase 2.3 — checkout form with live totals and the zone/weight delivery charge.
 
 ### 2026-11-21 · Phase 2.1 — Locations, delivery zones and charge rules
 

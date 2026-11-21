@@ -47,8 +47,7 @@ export function ProductDetail({ product }: { product: ProductView }) {
     if (!c.variant) return;
     const variantId = c.variant.id;
     void addToCart({ variantId }, c.quantity, { silent: then === "checkout" }).then((ok) => {
-      // "Order now" goes straight on; the checkout page (2.3) takes over from the cart page then.
-      if (ok && then === "checkout") router.push("/cart");
+      if (ok && then === "checkout") router.push("/checkout");
     });
   };
 

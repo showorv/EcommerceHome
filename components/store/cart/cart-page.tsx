@@ -59,18 +59,15 @@ export function CartPageView() {
             Some products need your attention before you order.
           </p>
         )}
-        {/* Checkout is the next step (2.3); this button switches on with it. */}
-        <Button
-          size="lg"
-          className="bg-brand text-brand-foreground hover:bg-brand/90 w-full"
-          disabled
-          aria-describedby="cart-checkout-note"
-        >
-          Checkout
-        </Button>
-        <p id="cart-checkout-note" className="text-muted-foreground -mt-2 text-center text-xs">
-          Ordering online opens very soon. Your cart is saved until then.
-        </p>
+        {cart.hasProblems ? (
+          <Button size="lg" className="w-full" disabled>
+            Checkout
+          </Button>
+        ) : (
+          <Button asChild size="lg" className="bg-brand text-brand-foreground hover:bg-brand/90 w-full">
+            <Link href="/checkout">Checkout</Link>
+          </Button>
+        )}
         <Button asChild variant="outline" className="w-full">
           <Link href="/search">Continue shopping</Link>
         </Button>

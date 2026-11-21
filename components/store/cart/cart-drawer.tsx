@@ -84,8 +84,8 @@ export function CartDrawer() {
                 <Link href="/cart">View cart</Link>
               </Button>
               <Button asChild className="bg-brand text-brand-foreground hover:bg-brand/90" onClick={close}>
-                {/* Checkout arrives in 2.3; until then the cart page explains the next step. */}
-                <Link href="/cart">Checkout</Link>
+                {/* Problems (sold out, changed) are fixed on the cart page first. */}
+                <Link href={cart.hasProblems ? "/cart" : "/checkout"}>Checkout</Link>
               </Button>
             </div>
           </div>

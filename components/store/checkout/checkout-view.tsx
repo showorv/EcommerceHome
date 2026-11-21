@@ -1,0 +1,579 @@
+"use client";
+
+import { CheckCircle2, ImageOff, Lock, ShoppingBag } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { reloadCart, useCart } from "@/components/store/cart/cart-store";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { authClient } from "@/lib/auth-client";
+import { formatTaka } from "@/lib/money";
+import { cn } from "@/lib/utils";
+import { submitCheckoutAction } from "@/modules/checkout/actions";
+import {
+  allowedMethods,
+  checkoutInput,
+  checkoutTotals,
+  fieldErrors,
+  PAYMENT_METHOD_NAMES,
+  zoneForArea,
+  type CheckoutField,
+  type CheckoutTotals,
+  type PaymentMethod,
+} from "@/modules/checkout/checkout";
+import type { DeliveryData } from "@/modules/delivery/data";
+
+/**
+ * Single-page checkout (FR-CO-02, SRS §2.2): the form on the left, an order summary that updates as the
+ * shopper types on the right. The server checks and works out everything again when the form is sent.
+ */
+
+type Form = {
+  name: string;
+  phone: string;
+  email: string;
+  districtId: string;
+  areaId: string;
+  address: string;
+  note: string;
+  paymentMethod: PaymentMethod | "";
+  acceptTerms: boolean;
+};
+
+const EMPTY: Form = {
+  name: "",
+  phone: "",
+  email: "",
+  districtId: "",
+  areaId: "",
+  address: "",
+  note: "",
+  paymentMethod: "",
+  acceptTerms: false,
+};
+
+const DRAFT_KEY = "checkout:draft:v1";
+const selectClass =
+  "h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive disabled:opacity-50";
+
+function readDraft(): Partial<Form> {
+  if (typeof window === "undefined") return {};
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}") as Partial<Form>;
+    return d && typeof d === "object" ? d : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The time, to the minute, for a campaign that starts or ends while the page is open. Read in the
+ * browser only (the page itself is built ahead of time), so it is 0 while prerendering.
+ */
+function subscribeMinute(onChange: () => void) {
+  const t = setInterval(onChange, 30_000);
+  return () => clearInterval(t);
+}
+const currentMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
+const useMinuteClock = () => useSyncExternalStore(subscribeMinute, currentMinute, () => 0);
+
+const label = (n: { en: string; bn: string }) => (n.bn ? `${n.en} · ${n.bn}` : n.en);
+
+export function CheckoutView({ config }: { config: DeliveryData }) {
+  const { cart, synced } = useCart();
+  const router = useRouter();
+  const { data: session } = authClient.useSession();
+  // What the shopper typed last time comes back (not the terms tick). Read before the first render;
+  // the form only shows once the cart is known, so server and browser render the same.
+  const [form, setForm] = useState<Form>(() => ({ ...EMPTY, ...readDraft(), acceptTerms: false }));
+  const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const now = useMinuteClock();
+
+  useEffect(() => {
+    try {
+      const { acceptTerms: _skip, ...draft } = form;
+      void _skip;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // Private mode: no draft, the form still works.
+    }
+  }, [form]);
+
+  // Signed-in customers: fill the empty fields with what the account knows, once per account.
+  const user = session?.user as { id: string; name?: string; email?: string; phoneNumber?: string | null } | undefined;
+  const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
+  if (user && user.id !== prefilledFor) {
+    setPrefilledFor(user.id);
+    setForm((f) => ({
+      ...f,
+      name: f.name || user.name || "",
+      email: f.email || user.email || "",
+      phone: f.phone || (user.phoneNumber ? user.phoneNumber.replace(/^\+88/, "") : ""),
+    }));
+  }
+
+  const districts = useMemo(
+    () => [...config.districts].sort((a, b) => a.name.en.localeCompare(b.name.en)),
+    [config.districts],
+  );
+  const areas = useMemo(
+    () =>
+      config.areas.filter((a) => a.districtId === form.districtId).sort((a, b) => a.name.en.localeCompare(b.name.en)),
+    [config.areas, form.districtId],
+  );
+  const zone = form.areaId ? zoneForArea(config, form.areaId) : null;
+  const methods = zone ? allowedMethods(zone.advanceRule) : allowedMethods("none");
+  const method = form.paymentMethod && methods.includes(form.paymentMethod) ? form.paymentMethod : methods[0]!;
+  const lines = cart.lines.filter((l) => l.problem === null);
+  const totals =
+    zone && lines.length > 0 ? checkoutTotals({ zone, rules: config.rules, lines, paymentMethod: method, now }) : null;
+
+  function set<K extends keyof Form>(key: K, value: Form[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    if (errors[key as CheckoutField]) setErrors((e) => ({ ...e, [key]: undefined }));
+    setNotice(null);
+  }
+
+  function submit() {
+    const data = { ...form, paymentMethod: method };
+    const local = checkoutInput.safeParse(data);
+    if (!local.success) {
+      const fe = fieldErrors(local.error);
+      setErrors(fe);
+      setNotice({ kind: "error", text: "Please check the highlighted fields." });
+      focusFirst(fe);
+      return;
+    }
+    start(async () => {
+      const res = await submitCheckoutAction(data).catch(() => null);
+      if (!res) {
+        setNotice({ kind: "error", text: "Couldn't reach the store. Check your connection and try again." });
+        return;
+      }
+      if (!res.ok) {
+        setErrors(res.fields ?? {});
+        setNotice({ kind: "error", text: res.error });
+        if (res.fields) focusFirst(res.fields);
+        return;
+      }
+      setErrors({});
+      if (totals && res.totals.total !== totals.total) {
+        // A price, stock or delivery setting changed since the page loaded: show the new numbers first.
+        void reloadCart();
+        router.refresh();
+        setNotice({
+          kind: "error",
+          text: `The total changed to ${formatTaka(res.totals.total)}. Please check your order and try again.`,
+        });
+        return;
+      }
+      setNotice({ kind: "ok", text: res.message });
+    });
+  }
+
+  if (!synced && cart.lines.length === 0) {
+    return <p className="text-muted-foreground py-16 text-center">Loading your cart…</p>;
+  }
+  if (cart.lines.length === 0) {
+    return (
+      <div className="grid place-items-center gap-4 rounded-lg border border-dashed px-4 py-16 text-center">
+        <ShoppingBag className="text-muted-foreground size-10" aria-hidden />
+        <p className="text-lg font-semibold">Your cart is empty</p>
+        <Button asChild>
+          <Link href="/search">Browse products</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const err = (k: CheckoutField) => errors[k];
+  const invalid = (k: CheckoutField) =>
+    err(k) ? { "aria-invalid": true as const, "aria-describedby": `co-${k}-error` } : {};
+
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="grid gap-8 lg:grid-cols-[1fr_24rem] lg:items-start"
+    >
+      <div className="grid gap-6">
+        {cart.hasProblems && (
+          <p className="border-destructive/40 bg-destructive/10 rounded-lg border p-3 text-sm" role="alert">
+            Some products in your cart changed (price, stock or no longer on sale).{" "}
+            <Link href="/cart" className="font-medium underline">
+              Check your cart
+            </Link>{" "}
+            before ordering.
+          </p>
+        )}
+
+        <Section title="Your details">
+          <Field id="name" label="Full name" error={err("name")}>
+            <Input
+              id="co-name"
+              autoComplete="name"
+              maxLength={80}
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              {...invalid("name")}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="phone" label="Mobile number" error={err("phone")} hint="We'll call or text to confirm.">
+              <Input
+                id="co-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                placeholder="01XXXXXXXXX"
+                maxLength={18}
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                {...invalid("phone")}
+              />
+            </Field>
+            <Field
+              id="email"
+              label={session ? "Email" : "Email (optional)"}
+              error={err("email")}
+              hint={session ? undefined : "For the invoice by email."}
+            >
+              <Input
+                id="co-email"
+                type="email"
+                autoComplete="email"
+                maxLength={120}
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                {...invalid("email")}
+              />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="Delivery address">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="districtId" label="District" error={err("districtId")}>
+              <select
+                id="co-districtId"
+                className={selectClass}
+                autoComplete="address-level1"
+                value={form.districtId}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, districtId: e.target.value, areaId: "" }));
+                  setErrors((x) => ({ ...x, districtId: undefined, areaId: undefined }));
+                  setNotice(null);
+                }}
+                {...invalid("districtId")}
+              >
+                <option value="">Choose your district</option>
+                {districts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {label(d.name)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field id="areaId" label="Area / thana" error={err("areaId")}>
+              <select
+                id="co-areaId"
+                className={selectClass}
+                autoComplete="address-level2"
+                value={form.areaId}
+                disabled={!form.districtId}
+                onChange={(e) => set("areaId", e.target.value)}
+                {...invalid("areaId")}
+              >
+                <option value="">{form.districtId ? "Choose your area" : "Choose a district first"}</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {label(a.name)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          {form.areaId && !zone && (
+            <p className="text-destructive text-sm" role="alert">
+              Sorry, we don&apos;t deliver to this area yet. Please call us.
+            </p>
+          )}
+          <Field id="address" label="Full address" error={err("address")} hint="House, road, block, landmark.">
+            <Textarea
+              id="co-address"
+              autoComplete="street-address"
+              rows={3}
+              maxLength={250}
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+              {...invalid("address")}
+            />
+          </Field>
+          <Field
+            id="note"
+            label="Delivery note (optional)"
+            error={err("note")}
+            hint="For example, a good time to call."
+          >
+            <Input id="co-note" maxLength={250} value={form.note} onChange={(e) => set("note", e.target.value)} />
+          </Field>
+        </Section>
+
+        <Section title="Payment">
+          <fieldset
+            className="grid gap-2"
+            aria-describedby={err("paymentMethod") ? "co-paymentMethod-error" : undefined}
+          >
+            <legend className="sr-only">How you&apos;ll pay</legend>
+            {methods.map((m) => (
+              <label
+                key={m}
+                className={cn(
+                  "has-[:focus-visible]:ring-ring/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:focus-visible]:ring-[3px]",
+                  method === m && "border-brand bg-brand/5",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value={m}
+                  checked={method === m}
+                  onChange={() => set("paymentMethod", m)}
+                  className="accent-brand mt-0.5 size-4"
+                />
+                <span className="grid gap-0.5">
+                  <span className="text-sm font-medium">{PAYMENT_METHOD_NAMES[m]}</span>
+                  <span className="text-muted-foreground text-xs">{methodHint(m, totals)}</span>
+                </span>
+              </label>
+            ))}
+            {zone && zone.advanceRule !== "none" && (
+              <p className="text-muted-foreground text-xs">
+                For {zone.name}, {zone.advanceRule === "full" ? "the full amount" : "the delivery charge"} is paid in
+                advance.
+              </p>
+            )}
+            {method !== "cod" && (
+              <p className="text-muted-foreground text-xs">
+                You&apos;ll send the advance by bKash or Nagad and type the transaction ID (TrxID) at the next step.
+              </p>
+            )}
+            {err("paymentMethod") && <FieldError id="paymentMethod" text={err("paymentMethod")!} />}
+          </fieldset>
+        </Section>
+
+        <div className="grid gap-1.5">
+          <div className="flex items-start gap-2.5 text-sm">
+            <Checkbox
+              id="co-acceptTerms"
+              aria-labelledby="co-acceptTerms-label"
+              checked={form.acceptTerms}
+              onCheckedChange={(v) => set("acceptTerms", v === true)}
+              className="mt-0.5"
+              {...invalid("acceptTerms")}
+            />
+            <label id="co-acceptTerms-label" htmlFor="co-acceptTerms">
+              I accept the{" "}
+              <Link href="/pages/terms" className="underline" target="_blank">
+                terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/pages/returns" className="underline" target="_blank">
+                return policy
+              </Link>
+              .
+            </label>
+          </div>
+          {err("acceptTerms") && <FieldError id="acceptTerms" text={err("acceptTerms")!} />}
+        </div>
+      </div>
+
+      <Summary cart={cart} totals={totals} zoneName={zone?.name ?? null}>
+        {notice && (
+          <p
+            role={notice.kind === "error" ? "alert" : "status"}
+            className={cn(
+              "flex items-start gap-2 rounded-md p-3 text-sm",
+              notice.kind === "ok" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+            )}
+          >
+            {notice.kind === "ok" && <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />}
+            {notice.text}
+          </p>
+        )}
+        <Button
+          type="submit"
+          size="lg"
+          className="bg-brand text-brand-foreground hover:bg-brand/90 w-full"
+          disabled={pending || cart.hasProblems}
+        >
+          <Lock className="size-4" aria-hidden />
+          {pending ? "Checking…" : totals ? `Place order · ${formatTaka(totals.total)}` : "Place order"}
+        </Button>
+      </Summary>
+    </form>
+  );
+}
+
+function focusFirst(fields: Partial<Record<CheckoutField, string>>) {
+  const order: CheckoutField[] = [
+    "name",
+    "phone",
+    "email",
+    "districtId",
+    "areaId",
+    "address",
+    "note",
+    "paymentMethod",
+    "acceptTerms",
+  ];
+  const first = order.find((k) => fields[k]);
+  if (first) document.getElementById(`co-${first}`)?.focus();
+}
+
+function methodHint(m: PaymentMethod, t: CheckoutTotals | null): string {
+  if (!t) {
+    return m === "cod" ? "Pay the courier when it arrives." : m === "full" ? "Nothing to pay at the door." : "";
+  }
+  const delivery = t.delivery.charge;
+  if (m === "cod") return `Pay ${formatTaka(t.subtotal - t.discount + delivery)} to the courier when it arrives.`;
+  if (m === "cod_advance") return `${formatTaka(delivery)} now, the rest when it arrives.`;
+  return `${formatTaka(t.subtotal - t.discount + delivery)} now, nothing at the door.`;
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="grid gap-4 rounded-lg border p-4 sm:p-5">
+      <h2 className="text-base font-semibold">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Field({
+  id,
+  label: text,
+  error,
+  hint,
+  children,
+}: {
+  id: CheckoutField;
+  label: string;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={`co-${id}`}>{text}</Label>
+      {children}
+      {error ? <FieldError id={id} text={error} /> : hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+    </div>
+  );
+}
+
+function FieldError({ id, text }: { id: CheckoutField; text: string }) {
+  return (
+    <p id={`co-${id}-error`} className="text-destructive text-xs font-medium">
+      {text}
+    </p>
+  );
+}
+
+function Summary({
+  cart,
+  totals,
+  zoneName,
+  children,
+}: {
+  cart: ReturnType<typeof useCart>["cart"];
+  totals: CheckoutTotals | null;
+  zoneName: string | null;
+  children: ReactNode;
+}) {
+  const subtotal = totals?.subtotal ?? cart.subtotal;
+  const d = totals?.delivery;
+  return (
+    <aside className="bg-card grid gap-4 rounded-lg border p-5 lg:sticky lg:top-24" aria-label="Order summary">
+      <h2 className="text-base font-semibold">Order summary</h2>
+      <ul className="grid max-h-72 gap-3 overflow-y-auto">
+        {cart.lines.map((l) => (
+          <li key={l.variantId} className={cn("flex gap-3", l.problem && "opacity-50")}>
+            <span className="bg-muted relative size-14 shrink-0 overflow-hidden rounded-md">
+              {l.image ? (
+                <Image src={l.image.url} alt="" fill sizes="56px" className="object-cover" />
+              ) : (
+                <ImageOff className="text-muted-foreground absolute inset-0 m-auto size-4" aria-hidden />
+              )}
+              <span className="bg-foreground text-background absolute top-0.5 right-0.5 grid min-w-5 place-items-center rounded-full px-1 text-[10px] font-bold">
+                {l.qty}
+              </span>
+            </span>
+            <span className="min-w-0 flex-1 text-sm">
+              <span className="line-clamp-2 font-medium">{l.title}</span>
+              {l.variantTitle && <span className="text-muted-foreground block text-xs">{l.variantTitle}</span>}
+            </span>
+            <span className="text-sm font-medium tabular-nums">{formatTaka(l.price * l.qty)}</span>
+          </li>
+        ))}
+      </ul>
+      <dl className="grid gap-2 border-t pt-3 text-sm">
+        <Row label="Subtotal" value={formatTaka(subtotal)} />
+        {totals && totals.discount > 0 && <Row label="Discount" value={`−${formatTaka(totals.discount)}`} />}
+        <Row
+          label={zoneName ? `Delivery (${zoneName})` : "Delivery"}
+          value={!d ? "Choose your area" : d.charge === 0 ? "Free" : formatTaka(d.charge)}
+          muted={!d}
+        />
+        {d && d.charge !== d.regularCharge && (
+          <p className="text-success -mt-1 text-xs">
+            {d.reason === "flat" ? "Campaign price" : "Free delivery"}: you save{" "}
+            {formatTaka(d.regularCharge - d.charge)}.
+          </p>
+        )}
+        {d && d.reason === "weight" && d.freeAbove !== null && subtotal < d.freeAbove && (
+          <p className="text-muted-foreground -mt-1 text-xs">
+            Free delivery from {formatTaka(d.freeAbove)} ({formatTaka(d.freeAbove - subtotal)} more).
+          </p>
+        )}
+        {totals && totals.codFee > 0 && <Row label="Cash-on-delivery fee" value={formatTaka(totals.codFee)} />}
+        <div className="flex items-baseline justify-between border-t pt-2">
+          <dt className="font-semibold">Total</dt>
+          <dd className="text-lg font-bold tabular-nums">{formatTaka(totals?.total ?? subtotal)}</dd>
+        </div>
+        {totals && (
+          <>
+            {totals.advanceDue > 0 && <Row label="Pay now (bKash / Nagad)" value={formatTaka(totals.advanceDue)} />}
+            <Row label="Pay at the door" value={formatTaka(totals.codAmount)} />
+          </>
+        )}
+      </dl>
+      {d && (
+        <p className="text-muted-foreground text-xs">
+          Arrives in {d.minDays === d.maxDays ? d.minDays : `${d.minDays}–${d.maxDays}`} days after we confirm your
+          order.
+        </p>
+      )}
+      {children}
+    </aside>
+  );
+}
+
+function Row({ label: text, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{text}</dt>
+      <dd className={cn("text-right tabular-nums", muted ? "text-muted-foreground" : "font-medium")}>{value}</dd>
+    </div>
+  );
+}
