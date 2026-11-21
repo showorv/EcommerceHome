@@ -96,8 +96,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.9 Search: typo tolerance + suggestions (FR-SF-08) — _built into the app (local Docker MongoDB has no Atlas Search); can move to Atlas Search / Meilisearch for a very large catalogue_
 - [x] 1.10 Storefront builder: sections per page (hero, carousel, grid, banners, video, FAQ…), reorder, schedule, hide, draft + preview + publish (FR-SF-01, FR-AD-07)
 - [x] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
-- [ ] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
-- [ ] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
+- [x] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
+- [x] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
 - [ ] 1.14 WhatsApp / Messenger floating button (FR-SF-10)
 - [ ] 1.15 ISR + on-demand revalidation when admin saves content (NFR-SC-02)
 
@@ -284,6 +284,77 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-21 · Phase 1.13 — Scroll motion
+
+- **Hero entrance:** when a page opens, the hero's label, heading, text and buttons rise in one after
+  another (the heading only moves, so it still shows at once for page speed).
+- **Reveal on scroll:** sections, product cards (in grids and sideways rows) and the "Why buy from us"
+  items fade and rise in as they come into view; cards in a row follow one another. It is plain CSS tied to scrolling (no JavaScript), so nothing is hidden while
+  scripts load and the main picture is never held back. Browsers without scroll-driven animations
+  (Firefox today) simply show everything without motion.
+- **Parallax hero:** as you scroll past the hero, its text eases down and fades (with or without a
+  picture), and a hero picture drifts slower than the page without ever showing an edge. A new
+  **"Parallax"** switch on each hero in the builder (on by default).
+- **Product story** (new builder section): a heading, 2–5 steps, each with a picture, title and text,
+  and an optional button. On computers the section stays in place while you scroll and each step takes
+  over in turn (picture cross-fade, text slide, progress dots). The animation library (GSAP) downloads
+  only when the section comes near the screen. Phones, the "reduced" / "off" motion levels and shoppers
+  who turn motion down see the steps one under another.
+- **Page transitions:** moving between store pages fades the old page out (0.15 s) and lets the new one
+  rise in (0.34 s). Opening quick view or changing filters doesn't trigger it.
+- **Motion level** (Menus & theme): "full" = all of the above; "reduced" = fades without movement;
+  "off" = no motion. A shopper's "reduce motion" device setting always switches scroll and page motion
+  off. Only opacity and transform are animated (smooth on cheap phones); the hero slideshow and the
+  announcement bar pause while scrolled out of view.
+- Checked on a production build: hero entrance, hero text scroll-away, reveal (incl. product rows),
+  picture parallax, pinned story with lazy GSAP, page transitions (old page fades, new page rises, ends
+  fully visible). Fixed: a hero with several slides would have tracked its own box instead of the page. 3 new tests (120 total); lint, types, formatting and
+  build pass. Test content was removed; your home page is back as it was.
+- **You need to:** restart `npm run dev` after any change to `app/globals.css`. The dev server reloads
+  components but keeps serving the old stylesheet until it restarts, so new motion won't show before
+  then. Optional: add a Product story section to the home page.
+- Check: the "Why buy from us" starter text says "7-day return on faulty items" but the Returns page
+  says 3 days. Make them match.
+- Steps 1.12 and 1.13 are committed together.
+
+**Next:** Phase 1.14 — WhatsApp / Messenger floating button.
+
+### 2026-11-21 · Phase 1.12 — CMS pages
+
+- **Admin → Pages** (new menu item, `cms.edit`): every page lives at `/pages/<address>`. The first time
+  anyone opens it, the seven standard pages are added as **unpublished drafts** with starter text:
+  About, Privacy policy, Terms & conditions, Return & refund (3-day change of mind, customer pays return
+  delivery, faulty items replaced free, as in the SRS defaults), Shipping & delivery, FAQ and Contact.
+  "New page" adds your own pages. Deleted pages are not added back (unless every page is deleted).
+- **Block editor:** heading, paragraph, bullet / numbered list, image with caption, coloured notice,
+  questions & answers (Google sees them as an FAQ), button, divider, contact details and contact form.
+  Add, reorder (drag or arrows), duplicate and remove blocks, with undo. Paragraphs, notices, answers and
+  list points take **bold**, _italic_ and links via B / I / link buttons. Text is stored as JSON and
+  drawn by our own components, so nothing typed in the admin can become HTML. Links must be store
+  links, https, tel: or mailto:.
+- **Draft → preview → publish**, as in the page builder: "Save draft" refreshes the preview beside the
+  editor, "Publish" updates the store at once, "Discard changes" goes back to the live version, and
+  "More" has "Take off the store" and "Delete page" (a copy stays in the audit log). Changing the
+  address of a live page warns that old links stop working. Each page has its own Google title and
+  description (otherwise the start of the page is used). Unpublished pages give a real 404.
+- **Contact form → Admin → Messages** (new menu item, `customers.view`): name, Bangladeshi mobile
+  number or email, and message. Spam protection: a hidden field for bots and at most 5 messages per hour
+  from one address. Messages have "To answer" / "Done" tabs with call and email links. The **contact
+  details** block shows the phone, email, address and social links from Menus & theme → Footer, so you
+  only type them once.
+- Menu and footer link fields now also suggest your pages.
+- Checked in the browser (test data removed afterwards, including the seeded pages, so you will see the
+  "we added 7 pages" notice yourself): seeding, formatting buttons, save → preview, publish → store,
+  contact form errors and success, Messages and "Mark done", creating a page (address clash message),
+  delete, take off the store → 404, FAQ structured data, phone layout. 13 new tests (117 total); lint,
+  types, formatting and build pass.
+- **You need to:** open Pages, read each starter page, change what doesn't fit (return days, delivery
+  times, refund method), add your phone / email / address under Menus & theme → Footer, then publish.
+  Add the Privacy and Terms links to the footer; Google sign-in (later) needs both pages.
+- Committed together with 1.13.
+
+**Next:** Phase 1.13 — scroll motion (reveal, page transitions, parallax hero, pinned story section).
 
 ### 2026-11-20 · Phase 1.11 — menus and theme
 

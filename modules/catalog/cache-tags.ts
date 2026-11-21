@@ -11,4 +11,6 @@ export const TAGS = {
   navigation: "navigation",
   page: (slug: string) => `page:${slug}`, // storefront builder pages (home…)
   design: "design", // menus, footer, announcement bar, theme
+  cmsPage: (slug: string) => `cmsPage:${slug}`, // About, policies, FAQ, Contact…
+  cmsPages: "cmsPages", // the list of published CMS pages
 } as const;

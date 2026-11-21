@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { connectMongoose } from "@/lib/db/mongo";
 import { TAGS } from "@/modules/catalog/cache-tags";
 import { Category, Collection } from "@/modules/catalog/models";
+import { CmsPage } from "@/modules/cms/models";
 import { Page } from "./models";
 import { cleanSections, defaultHomeSections, isLive, nextChange, type Section } from "./sections";
 
@@ -167,9 +168,10 @@ export async function getDraftSections(slug: BuilderPageSlug): Promise<Section[]
 /** Categories (with their parents' names) and collections the builder's pickers offer. */
 export async function getBuilderOptions() {
   await connectMongoose();
-  const [cats, cols] = await Promise.all([
+  const [cats, cols, pages] = await Promise.all([
     Category.find().select("name parentId slug active").sort({ order: 1, "name.en": 1 }).lean<AnyDoc[]>(),
     Collection.find().select("name active slug").sort({ "name.en": 1 }).lean<AnyDoc[]>(),
+    CmsPage.find().select("slug draft.content.title published.content.title").sort({ slug: 1 }).lean<AnyDoc[]>(),
   ]);
   const byId = new Map(cats.map((c) => [String(c._id), c]));
   const path = (c: AnyDoc) => {
@@ -201,6 +203,10 @@ export async function getBuilderOptions() {
       { label: "Home", href: "/" },
       { label: "Search", href: "/search" },
       { label: "My account", href: "/account" },
+      ...pages.map((p) => ({
+        label: `Page: ${String(p.published?.content?.title || p.draft?.content?.title || p.slug)}${p.published ? "" : " (not published)"}`,
+        href: `/pages/${String(p.slug)}`,
+      })),
       ...cats
         .filter((c) => c.active !== false)
         .map((c) => ({ label: `Category: ${path(c)}`, href: `/c/${String(c.slug)}` })),

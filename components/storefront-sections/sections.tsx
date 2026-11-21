@@ -14,7 +14,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Reveal } from "@/components/motion/primitives";
+import { Reveal, staggerStyle } from "@/components/motion/reveal";
 import { ProductGrid } from "@/components/store/product-grid";
 import { YouTubeEmbed } from "@/components/store/youtube-embed";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { ArtImage } from "./art-image";
 import { HeroSlider } from "./hero-slider";
 import { NewsletterForm } from "./newsletter-form";
 import { ProductRail } from "./product-rail";
+import { StorySection } from "./story-section";
 
 /**
  * Renders a page built in the admin storefront builder (FR-SF-01). Sections arrive already filtered
@@ -70,6 +71,8 @@ function SectionView({ section: s, first }: { section: Section; first: boolean }
       return <Newsletter s={s} />;
     case "richText":
       return <RichText s={s} />;
+    case "story":
+      return <StorySection data={s.data} />;
   }
 }
 
@@ -124,7 +127,7 @@ function Cta({
 // ---------- Hero ----------
 
 function Hero({ s, first }: { s: SectionOf<"hero">; first: boolean }) {
-  const { slides, autoplaySeconds, height } = s.data;
+  const { slides, autoplaySeconds, height, parallax } = s.data;
   const rendered = slides.map((slide, i) => {
     const dark = slide.theme === "dark";
     const hasImage = Boolean(slide.image.url || slide.mobileImage.url);
@@ -132,12 +135,17 @@ function Hero({ s, first }: { s: SectionOf<"hero">; first: boolean }) {
       <div
         key={i}
         className={cn(
-          "relative flex items-center",
+          "relative isolate flex items-center overflow-hidden",
           height === "tall" ? "min-h-[520px] md:min-h-[640px]" : "min-h-[400px] md:min-h-[480px]",
           dark ? "bg-neutral-900 text-white" : "bg-muted text-foreground",
+          parallax && "parallax-scope",
         )}
       >
-        <ArtImage image={slide.image} mobileImage={slide.mobileImage} eager={first && i === 0} />
+        {/* While scrolling, the picture drifts and the text eases away (CSS only; see "Scroll motion" in
+            globals.css). The text also rises in when the page opens (hero-enter). */}
+        <div className={cn("absolute inset-0 -z-10", parallax && hasImage && "parallax")}>
+          <ArtImage image={slide.image} mobileImage={slide.mobileImage} eager={first && i === 0} />
+        </div>
         {hasImage && (
           <div
             aria-hidden
@@ -155,7 +163,8 @@ function Hero({ s, first }: { s: SectionOf<"hero">; first: boolean }) {
         )}
         <div
           className={cn(
-            "relative mx-auto grid w-full max-w-6xl gap-4 px-4 py-16",
+            "hero-enter relative mx-auto grid w-full max-w-6xl gap-4 px-4 py-16",
+            parallax && "hero-scroll",
             slide.align === "center" && "justify-items-center text-center",
           )}
         >
@@ -415,7 +424,7 @@ function Usp({ s }: { s: SectionOf<"usp"> }) {
         {s.data.items.map((item, i) => {
           const Icon = ICONS[item.icon] ?? Truck;
           return (
-            <li key={i} className="bg-muted/50 flex items-start gap-3 rounded-xl p-4">
+            <li key={i} className="reveal bg-muted/50 flex items-start gap-3 rounded-xl p-4" style={staggerStyle(i)}>
               <span className="bg-brand/10 text-brand grid size-10 shrink-0 place-items-center rounded-full">
                 <Icon className="size-5" aria-hidden />
               </span>

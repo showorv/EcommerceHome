@@ -36,54 +36,57 @@ export async function StoreShell({
     <MotionProvider level={theme.motion}>
       {/* Values come from the validated theme only (hex colours and fixed lists). */}
       <style dangerouslySetInnerHTML={{ __html: themeCss(theme) }} />
-      {banner}
-      {showAnnouncement && <AnnouncementBar announcement={nav.announcement} />}
-      <header className="bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
-        <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 md:h-16">
-          <div className="flex shrink-0 items-center gap-1">
-            <MobileMenu items={items} storeName={name} />
-            <Link href="/" className="flex items-center text-lg font-bold tracking-tight" aria-label={`${name} home`}>
-              {theme.logo.url ? (
-                <Image
-                  src={theme.logo.url}
-                  alt={theme.logo.alt || name}
-                  width={theme.logoHeight * 5}
-                  height={theme.logoHeight}
-                  style={{ height: theme.logoHeight, width: "auto" }}
-                  className="max-w-[45vw] object-contain"
-                  loading="eager"
-                />
-              ) : (
-                name
-              )}
-            </Link>
-          </div>
-          <div className="flex flex-1 items-center justify-end gap-2 md:justify-center">
-            {/* Reads the address (?q= on the results page), so it renders in the browser. */}
-            <Suspense fallback={<HeaderSearchFallback />}>
-              <HeaderSearch />
-            </Suspense>
-          </div>
-          <nav className="flex shrink-0 items-center gap-4 text-sm" aria-label="Account">
-            <Link href="/account" className="text-muted-foreground hover:text-foreground hidden sm:inline">
-              Account
-            </Link>
-          </nav>
-        </div>
-        {items.length > 0 && (
-          <nav aria-label="Main" className="hidden border-t md:block">
-            <div className="relative mx-auto max-w-6xl px-3 py-1">
-              <DesktopNav items={items} />
+      {/* data-motion switches the CSS scroll motion and page transitions (globals.css, "Scroll motion"). */}
+      <div data-motion={theme.motion} className="contents">
+        {banner}
+        {showAnnouncement && <AnnouncementBar announcement={nav.announcement} />}
+        <header className="bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
+          <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 md:h-16">
+            <div className="flex shrink-0 items-center gap-1">
+              <MobileMenu items={items} storeName={name} />
+              <Link href="/" className="flex items-center text-lg font-bold tracking-tight" aria-label={`${name} home`}>
+                {theme.logo.url ? (
+                  <Image
+                    src={theme.logo.url}
+                    alt={theme.logo.alt || name}
+                    width={theme.logoHeight * 5}
+                    height={theme.logoHeight}
+                    style={{ height: theme.logoHeight, width: "auto" }}
+                    className="max-w-[45vw] object-contain"
+                    loading="eager"
+                  />
+                ) : (
+                  name
+                )}
+              </Link>
             </div>
-          </nav>
-        )}
-      </header>
-      <main className="flex-1">{children}</main>
-      <Footer design={design} name={name} />
-      {/* Reads ?product= from the URL, so it renders in the browser only (the page itself stays static). */}
-      <Suspense fallback={null}>
-        <QuickViewHost />
-      </Suspense>
+            <div className="flex flex-1 items-center justify-end gap-2 md:justify-center">
+              {/* Reads the address (?q= on the results page), so it renders in the browser. */}
+              <Suspense fallback={<HeaderSearchFallback />}>
+                <HeaderSearch />
+              </Suspense>
+            </div>
+            <nav className="flex shrink-0 items-center gap-4 text-sm" aria-label="Account">
+              <Link href="/account" className="text-muted-foreground hover:text-foreground hidden sm:inline">
+                Account
+              </Link>
+            </nav>
+          </div>
+          {items.length > 0 && (
+            <nav aria-label="Main" className="hidden border-t md:block">
+              <div className="relative mx-auto max-w-6xl px-3 py-1">
+                <DesktopNav items={items} />
+              </div>
+            </nav>
+          )}
+        </header>
+        <main className="flex-1">{children}</main>
+        <Footer design={design} name={name} />
+        {/* Reads ?product= from the URL, so it renders in the browser only (the page itself stays static). */}
+        <Suspense fallback={null}>
+          <QuickViewHost />
+        </Suspense>
+      </div>
     </MotionProvider>
   );
 }

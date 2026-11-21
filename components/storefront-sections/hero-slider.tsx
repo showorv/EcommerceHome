@@ -4,11 +4,12 @@ import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMotionLevel } from "@/components/motion/motion-provider";
+import { useOnScreen } from "@/components/motion/use-on-screen";
 import { cn } from "@/lib/utils";
 
 /**
  * Hero slides (FR-SF-01). Slides cross-fade; autoplay pauses while the pointer or keyboard focus is on
- * the hero, when the tab is hidden, and never starts for visitors who prefer less motion. Each slide's
+ * the hero, while it is scrolled out of view, when the tab is hidden, and never starts for visitors who prefer less motion. Each slide's
  * content is rendered on the server and passed in.
  */
 export function HeroSlider({
@@ -27,26 +28,31 @@ export function HeroSlider({
   const [paused, setPaused] = useState(false);
   const [stopped, setStopped] = useState(false);
   const hovering = useRef(false);
+  const root = useRef<HTMLElement>(null);
+  const onScreen = useOnScreen(root);
   const level = useMotionLevel();
   const reduce = useReducedMotion();
   const count = slides.length;
   const canAutoplay = count > 1 && autoplaySeconds > 0 && level !== "off" && !reduce && !stopped;
 
   useEffect(() => {
-    if (!canAutoplay || paused) return;
+    if (!canAutoplay || paused || !onScreen) return;
     const t = setTimeout(() => {
       if (document.visibilityState === "visible") setIndex((i) => (i + 1) % count);
     }, autoplaySeconds * 1000);
     return () => clearTimeout(t);
-  }, [canAutoplay, paused, index, count, autoplaySeconds]);
+  }, [canAutoplay, paused, onScreen, index, count, autoplaySeconds]);
 
   const go = (i: number) => setIndex((i + count) % count);
 
   return (
     <section
+      ref={root}
       aria-roledescription="carousel"
       aria-label="Highlights"
-      className={cn("relative isolate overflow-hidden", className)}
+      // overflow-clip, not overflow-hidden: a hidden-overflow box is a scroll container of its own, and the
+      // scroll-linked hero motion would follow it instead of the page.
+      className={cn("relative isolate overflow-clip", className)}
       onPointerEnter={() => {
         hovering.current = true;
         setPaused(true);

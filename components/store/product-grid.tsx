@@ -1,4 +1,4 @@
-import { Stagger, StaggerItem } from "@/components/motion/primitives";
+import { Stagger, StaggerItem } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 import type { CardProduct } from "@/modules/catalog/storefront";
 import { ProductCard } from "./product-card";
@@ -17,7 +17,7 @@ export function ProductGrid({
   return (
     <Stagger className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4", className)}>
       {products.map((p, i) => (
-        <StaggerItem key={p.id} className="h-full">
+        <StaggerItem key={p.id} index={i} className="h-full">
           <ProductCard product={p} eager={i < eagerCount} />
         </StaggerItem>
       ))}

@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ProductCard } from "@/components/store/product-card";
+import { staggerStyle } from "@/components/motion/reveal";
 import type { CardProduct } from "@/modules/catalog/storefront";
 
 /**
@@ -34,14 +35,19 @@ export function ProductRail({ products, label }: { products: CardProduct[]; labe
   };
 
   return (
-    <div className="group/rail relative">
+    // The row scrolls sideways, so the cards follow the row's place on the page (reveal-group).
+    <div className="group/rail reveal-group relative">
       <ul
         ref={track}
         aria-label={label}
         className="-mx-4 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-2 sm:gap-4 [&::-webkit-scrollbar]:hidden"
       >
         {products.map((p, i) => (
-          <li key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[calc(25%-0.75rem)]">
+          <li
+            key={p.id}
+            className="reveal-item w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[calc(25%-0.75rem)]"
+            style={staggerStyle(i)}
+          >
             <ProductCard product={p} eager={i < 2} />
           </li>
         ))}

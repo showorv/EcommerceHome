@@ -316,7 +316,13 @@ export function StorefrontBuilder({
         </DropdownMenu>
       </div>
 
-      <PreviewFrame slug={page.slug} reloadKey={previewKey} unsaved={unsaved} pending={pending} onSave={save} />
+      <PreviewFrame
+        path={`/preview/${page.slug}`}
+        reloadKey={previewKey}
+        unsaved={unsaved}
+        pending={pending}
+        onSave={save}
+      />
 
       <ScheduleDialog
         open={scheduling}

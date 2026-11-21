@@ -21,6 +21,7 @@ export const SECTION_TYPES = [
   "faq",
   "newsletter",
   "richText",
+  "story",
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];
 
@@ -35,6 +36,10 @@ export const SECTION_INFO: Record<SectionType, { name: string; description: stri
   faq: { name: "FAQ", description: "Questions and answers" },
   newsletter: { name: "Newsletter", description: "Email sign-up for offers" },
   richText: { name: "Text", description: "A heading and paragraphs" },
+  story: {
+    name: "Product story",
+    description: "Steps that change as shoppers scroll, with the picture held in place (best for a hero product)",
+  },
 };
 
 export const USP_ICONS = ["truck", "cash", "shield", "refund", "support", "star", "gift", "clock"] as const;
@@ -104,6 +109,8 @@ export const SECTION_DATA = {
     slides: z.array(heroSlide).min(1, "Add at least one slide").max(6),
     autoplaySeconds: z.coerce.number().int().min(0).max(20).default(6),
     height: z.enum(["medium", "tall"]).default("medium"),
+    /** The picture moves a little slower than the page while scrolling (FR-SF-04). */
+    parallax: z.boolean().default(true),
   }),
   categoryGrid: z.object({
     heading: text(80),
@@ -183,6 +190,22 @@ export const SECTION_DATA = {
     body: text(5000),
     align: z.enum(["left", "center"]).default("left"),
   }),
+  story: z.object({
+    heading: text(120),
+    intro: text(300),
+    steps: z
+      .array(
+        z.object({
+          title: text(80).refine(Boolean, "Give each step a title"),
+          text: text(400),
+          image: imageField.refine((i) => i.url !== "", "Add a picture for each step"),
+        }),
+      )
+      .min(2, "Add at least two steps")
+      .max(5),
+    ctaLabel: text(30),
+    ctaHref: hrefField,
+  }),
 } satisfies Record<SectionType, z.ZodType>;
 
 export type SectionData<T extends SectionType> = z.infer<(typeof SECTION_DATA)[T]>;
@@ -212,6 +235,7 @@ export const sectionInput = z
     sectionOf("faq"),
     sectionOf("newsletter"),
     sectionOf("richText"),
+    sectionOf("story"),
   ])
   .refine((s) => !s.startAt || !s.endAt || s.startAt < s.endAt, {
     message: "The end must be after the start",
@@ -292,6 +316,7 @@ const DEFAULT_DATA: { [T in SectionType]: () => SectionData<T> } = {
     slides: [{ ...emptySlide(), heading: "Your headline here", ctaLabel: "Shop now", ctaHref: "/search" }],
     autoplaySeconds: 6,
     height: "medium",
+    parallax: true,
   }),
   categoryGrid: () => ({ heading: "Shop by category", subheading: "", categoryIds: [], style: "tiles" }),
   productCarousel: () => ({
@@ -345,6 +370,17 @@ const DEFAULT_DATA: { [T in SectionType]: () => SectionData<T> } = {
     note: "No spam. Unsubscribe any time.",
   }),
   richText: () => ({ heading: "", body: "", align: "left" }),
+  story: () => ({
+    heading: "How it works",
+    intro: "",
+    steps: [
+      { title: "Step one", text: "", image: { url: "", alt: "" } },
+      { title: "Step two", text: "", image: { url: "", alt: "" } },
+      { title: "Step three", text: "", image: { url: "", alt: "" } },
+    ],
+    ctaLabel: "",
+    ctaHref: "",
+  }),
 };
 
 export function newSection<T extends SectionType>(type: T, preset?: "featuredCollection"): SectionOf<T> {

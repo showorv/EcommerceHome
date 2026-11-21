@@ -208,7 +208,7 @@ export function DesignEditor({
         </Tabs>
       </div>
 
-      <PreviewFrame slug="home" reloadKey={previewKey} unsaved={unsaved} pending={pending} onSave={save} />
+      <PreviewFrame path="/preview/home" reloadKey={previewKey} unsaved={unsaved} pending={pending} onSave={save} />
 
       <Dialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
         <DialogContent>

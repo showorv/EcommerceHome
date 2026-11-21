@@ -4,18 +4,19 @@ import { ExternalLink, Monitor, RefreshCw, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-/** Live preview of the drafts (page sections, menus and theme) in a frame, at computer or phone size. */
+/** Live preview of a draft (page sections, menus and theme, CMS pages) in a frame, at computer or phone size. */
 
 const DESKTOP_WIDTH = 1280;
 
 export function PreviewFrame({
-  slug,
+  path,
   reloadKey,
   unsaved,
   pending,
   onSave,
 }: {
-  slug: string;
+  /** The preview page, e.g. /preview/home. */
+  path: string;
   reloadKey: number;
   unsaved: boolean;
   pending: boolean;
@@ -34,7 +35,7 @@ export function PreviewFrame({
     return () => ro.disconnect();
   }, []);
 
-  const src = `/preview/${slug}?r=${reloadKey}-${manualKey}`;
+  const src = `${path}?r=${reloadKey}-${manualKey}`;
   const scale = device === "desktop" && width ? Math.min(1, width / DESKTOP_WIDTH) : 1;
   const height = 760;
 
@@ -64,7 +65,7 @@ export function PreviewFrame({
             <RefreshCw className="size-4" aria-hidden /> Reload
           </Button>
           <Button size="sm" variant="ghost" asChild>
-            <a href={`/preview/${slug}`} target="_blank" rel="noopener">
+            <a href={path} target="_blank" rel="noopener">
               <ExternalLink className="size-4" aria-hidden /> Open
             </a>
           </Button>

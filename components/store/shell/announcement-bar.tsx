@@ -2,13 +2,14 @@
 
 import { X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useOnScreen } from "@/components/motion/use-on-screen";
 import { cn } from "@/lib/utils";
 import type { Navigation } from "@/modules/storefront/design";
 
 /**
  * Announcement bar (FR-SF-02). Several messages take turns every 5 seconds (paused on hover or
- * focus). A closed bar stays closed until its text changes.
+ * focus, and while scrolled out of view). A closed bar stays closed until its text changes.
  */
 
 const STYLES = {
@@ -45,17 +46,20 @@ export function AnnouncementBar({ announcement }: { announcement: Navigation["an
   );
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const onScreen = useOnScreen(root);
 
   useEffect(() => {
-    if (messages.length < 2 || paused) return;
+    if (messages.length < 2 || paused || !onScreen) return;
     const t = setInterval(() => setIndex((i) => (i + 1) % messages.length), 5000);
     return () => clearInterval(t);
-  }, [messages.length, paused]);
+  }, [messages.length, paused, onScreen]);
 
   if (closedNow || (dismissible && closedBefore) || messages.length === 0) return null;
 
   return (
     <div
+      ref={root}
       role="region"
       aria-label="Announcement"
       className={cn("relative text-center text-sm font-medium", STYLES[style])}

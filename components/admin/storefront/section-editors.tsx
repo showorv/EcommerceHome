@@ -355,6 +355,19 @@ function HeroEditor({ id, data, onChange }: EditorProps<"hero">) {
           />
         </Field>
       </div>
+      <label className="flex items-start gap-2 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={data.parallax}
+          onCheckedChange={(v) => onChange({ ...data, parallax: v === true })}
+        />
+        <span>
+          Parallax: the picture moves a little slower than the page when scrolling
+          <span className="text-muted-foreground block text-xs">
+            Only with the “Full” animation level, and never for shoppers who turn motion down on their device.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }
@@ -855,6 +868,71 @@ function RichTextEditor({ id, data, onChange }: EditorProps<"richText">) {
   );
 }
 
+function StoryEditor({ id, data, onChange }: EditorProps<"story">) {
+  return (
+    <div className="grid gap-4">
+      <p className="text-muted-foreground text-sm">
+        On computers the section stays in place while shoppers scroll through the steps, and the picture changes with
+        each step. On phones, and for shoppers who turn motion down, the steps are shown one under another.
+      </p>
+      <Text
+        id={`${id}-heading`}
+        label="Heading"
+        value={data.heading}
+        onChange={(heading) => onChange({ ...data, heading })}
+        max={120}
+      />
+      <Text
+        id={`${id}-intro`}
+        label="Short intro (optional)"
+        value={data.intro}
+        onChange={(intro) => onChange({ ...data, intro })}
+        max={300}
+        multiline
+        rows={2}
+      />
+      <ItemList
+        items={data.steps}
+        onChange={(steps) => onChange({ ...data, steps })}
+        make={() => ({ title: "", text: "", image: { url: "", alt: "" } })}
+        max={5}
+        min={2}
+        noun="Step"
+        render={(step, set, i) => (
+          <>
+            <Field label="Picture" htmlFor={`${id}-st${i}-img`} hint="Square or 4:5 pictures work best">
+              <ImagePicker id={`${id}-st${i}-img`} value={step.image} onChange={(image) => set({ ...step, image })} />
+            </Field>
+            <Text
+              id={`${id}-st${i}-title`}
+              label="Title"
+              value={step.title}
+              onChange={(title) => set({ ...step, title })}
+              max={80}
+            />
+            <Text
+              id={`${id}-st${i}-text`}
+              label="Text"
+              value={step.text}
+              onChange={(text) => set({ ...step, text })}
+              max={400}
+              multiline
+              rows={3}
+            />
+          </>
+        )}
+      />
+      <ButtonFields
+        id={`${id}-cta`}
+        label={data.ctaLabel}
+        href={data.ctaHref}
+        onLabel={(ctaLabel) => onChange({ ...data, ctaLabel })}
+        onHref={(ctaHref) => onChange({ ...data, ctaHref })}
+      />
+    </div>
+  );
+}
+
 function clampInt(raw: string, min: number, max: number): number {
   const n = Math.round(Number(raw));
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
@@ -871,4 +949,5 @@ export const EDITORS: { [T in SectionType]: (p: EditorProps<T>) => ReactNode } =
   faq: FaqEditor,
   newsletter: NewsletterEditor,
   richText: RichTextEditor,
+  story: StoryEditor,
 };
