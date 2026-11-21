@@ -92,6 +92,7 @@ const orderSchema = new Schema(
       releasedAt: { type: Date, default: null },
     },
     riskScore: { type: Number, default: 0 },
+    riskLevel: { type: String, enum: ["low", "medium", "high"], default: "low" },
     riskReasons: { type: [String], default: [] },
     callLog: { type: [Schema.Types.Mixed], default: [] },
     notes: { type: [Schema.Types.Mixed], default: [] },

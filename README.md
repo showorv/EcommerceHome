@@ -112,7 +112,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
 - [x] 2.6 Coupons (FR-CO-04)
 - [x] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
-- [ ] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
+- [x] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
 - [ ] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
 - [ ] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
 - [ ] 2.11 Invoice: sequential number, PDF with Bangla font, signed token link with expiry/revoke (FR-OR-03…05)
@@ -302,6 +302,81 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-21 · Phase 2.8 — Risk score, blocked numbers, order rules
+
+- **New Admin → Order rules page** (`settings.manage`, FR-AD-08). It sets which orders must pay an
+  advance before you ship. The first rule that matches applies:
+  - **past cancelled or returned orders** on the same phone (default: on, at least 1)
+  - **high risk score** (default: off, score 60 or more)
+  - **new customers in far zones**: no delivered order yet, and the zone is ticked as far. Until you
+    save, zones named "Outside …" count as far (default: on).
+  - **large orders**: items above an amount (default: on, above ৳3,000)
+  - **what they pay first**: the delivery charge (default) or the full amount
+  - **hold stock for new orders**: hours, 24 by default. This was planned for 2.9 and is here now.
+
+  The defaults are the SRS rule: new customers outside Dhaka, and orders above ৳3,000, pay the delivery
+  charge first. A zone that already asks for more keeps its own rule.
+
+- **At checkout:** once the phone and area are filled in, the page asks the server which payment
+  options this order gets. When a rule asks for an advance:
+  - cash on delivery disappears
+  - the shopper sees a kind reason, e.g. "For a first order to your area, please pay the delivery
+    charge in advance."
+  - the server checks the same thing again when the order is placed
+
+  If no bKash/Nagad number is switched on, the rules can't ask for an advance. The order goes through
+  as cash on delivery and its risk notes say "call".
+
+- **New Admin → Blocked numbers page** (`customers.block`, FR-AD-06): add, change and remove numbers,
+  with a reason for staff.
+  - **Blocked:** the number gets no checkout code and can't order. The shopper only reads "Sorry, we
+    can't take orders from this number online. Please contact us." under the phone field, never why.
+  - **Flagged:** the number can still order. Its orders show your note and score higher.
+- **Risk score** (0–100, Low / Medium / High) is saved on every order with its reasons, for the orders
+  page in 2.9. Points:
+
+  | Reason                                                          | Points         |
+  | --------------------------------------------------------------- | -------------- |
+  | flagged number                                                  | 40             |
+  | each returned order                                             | 25, at most 50 |
+  | each cancelled order                                            | 10, at most 30 |
+  | no delivered order yet                                          | 20             |
+  | far zone                                                        | 10             |
+  | order above the large-order amount                              | 15             |
+  | 2+ other numbers ordering from the same device in the last hour | 20             |
+  | name shares no word with the names on earlier orders            | 10             |
+
+- Every change on both pages goes to the audit log.
+- Found and fixed while testing: the large-order default would have been saved as ৳30 instead of
+  ৳3,000. The form's default amount skipped the taka → poisha step.
+- Checked in the browser:
+  - **Order rules:** the defaults showed (৳3,000, Outside Dhaka ticked, 24 h). Saving 48 h worked.
+    0 and 999 hours were refused, with the field named in the message.
+  - **Blocked numbers:** adding a blocked and a flagged number worked. A duplicate and a bad number
+    were refused. Editing a reason and removing both entries worked. Each change was audited.
+  - **Checkout with a test bKash number switched on:**
+    - a new customer in Bogura (Outside Dhaka) got only the advance options and the reason
+    - in Dhaka, cash on delivery came back
+    - the blocked number showed the message once and couldn't get a code or order
+    - the flagged number ordered after the phone code: score 60, with the reasons "Flagged number: …"
+      and "New customer", and stock held for 48 h
+  - both admin pages work at phone size
+- **Cleanup:**
+  - removed the test order, its SMS job, the order-number counter (your first real order is still
+    SR10001), the test cart and the rate-limit keys
+  - removed the test entries, the saved order rules, the test bKash setting and the 7 audit entries
+  - the chopper's stock, held count, listing fields and timestamps are back exactly as before
+- 17 new tests (233 total); lint, types, formatting and the production build pass.
+- **For you:**
+  - **Restart `npm run dev`** before placing orders. The running server still uses the order format
+    from before this step and drops the new risk level (Low/Medium/High). The score and reasons save
+    fine. A fresh start saves the level too.
+  - Order rules start from the defaults above. Open the page and save to keep your own.
+- Committed.
+
+**Next:** Phase 2.9 — admin orders: pending queue, click-to-call, call log, notes, edit before confirm,
+confirm/cancel with reason, bulk actions.
+
 ### 2026-11-21 · Phase 2.7 — Order placement
 
 - **"Place order" now saves the order.** The server checks and prices everything again (FR-CO-05).
@@ -361,7 +436,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   - **Restart the worker** (`pnpm worker`) so it picks up the new orders queue and the 5-minute check.
   - Set `REVALIDATE_SECRET` in `.env.local` (32+ characters) so the worker can rebuild product pages
     after it puts stock back on sale.
-  - The hold time (24 h) gets its admin setting with the orders page in 2.9.
   - Orders are in the database but there's no admin screen for them yet: that's 2.9.
 - Committed.
 

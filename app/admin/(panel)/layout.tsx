@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { requiredPermission } from "@/modules/auth/admin-routes";
 import { requireStaff } from "@/modules/auth/session";
 
-/** Menu items appear only when the user has the permission; proxy.ts and the pages check again. */
+/** Menu items appear only when the user has the permission (admin-routes.ts); proxy.ts and the pages check again. */
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/products", label: "Products" },
@@ -17,6 +17,8 @@ const NAV: NavItem[] = [
   { href: "/admin/coupons", label: "Coupons" },
   { href: "/admin/delivery", label: "Delivery" },
   { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/order-rules", label: "Order rules" },
+  { href: "/admin/blocked-numbers", label: "Blocked numbers" },
   { href: "/admin/messages", label: "Messages" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },

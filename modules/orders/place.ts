@@ -140,6 +140,7 @@ export async function placeOrder(input: {
       userAgent: input.userAgent,
       now,
       reservationHours: hours,
+      risk: check.risk.risk,
     });
 
   const session = await mongoose.startSession();

@@ -13,8 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { formatTaka } from "@/lib/money";
+import { normalizeBdPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
-import { sendCheckoutCodeAction, submitCheckoutAction } from "@/modules/checkout/actions";
+import {
+  checkoutRulesAction,
+  sendCheckoutCodeAction,
+  submitCheckoutAction,
+  type CheckoutRulesResponse,
+} from "@/modules/checkout/actions";
 import {
   availableMethods,
   checkoutInput,
@@ -148,7 +154,25 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
     [config.areas, form.districtId],
   );
   const zone = form.areaId ? zoneForArea(config, form.areaId) : null;
-  const methods = availableMethods(zone?.advanceRule ?? "none", wallets.length);
+  // The order rules (first order to a far zone, a large order…) may ask for more than the zone does.
+  // Asked from the server once the phone and area are known; until it answers, the zone's rule shows.
+  const phoneOk = normalizeBdPhone(form.phone);
+  const rulesKey = phoneOk && form.areaId ? `${phoneOk}|${form.areaId}|${cart.subtotal}|${form.name.trim()}` : null;
+  const [rules, setRules] = useState<{ key: string; res: CheckoutRulesResponse } | null>(null);
+  useEffect(() => {
+    if (!rulesKey) return;
+    const [phone, areaId, , ...rest] = rulesKey.split("|");
+    const t = setTimeout(() => {
+      void checkoutRulesAction({ phone, areaId, name: rest.join("|") })
+        .then((res) => setRules({ key: rulesKey, res }))
+        .catch(() => undefined);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [rulesKey]);
+  const ruled = rules && rules.key === rulesKey && rules.res.ok ? rules.res : null;
+  const blocked = rules && rules.key === rulesKey && !rules.res.ok && rules.res.blocked ? rules.res.error : null;
+  const advanceRule = ruled ? ruled.advance : (zone?.advanceRule ?? "none");
+  const methods = availableMethods(advanceRule, wallets.length);
   // No option at all: this area needs an advance and no wallet is set up yet (the server says so too).
   const method =
     form.paymentMethod && methods.includes(form.paymentMethod) ? form.paymentMethod : (methods[0] ?? "cod");
@@ -231,6 +255,10 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
         setErrors(res.fields ?? {});
         setNotice({ kind: "error", text: res.error });
         if (res.fields) focusFirst(res.fields);
+        // The order rules asked for an advance this page didn't know about yet: show those options.
+        if (res.advance && rulesKey) {
+          setRules({ key: rulesKey, res: { ok: true, advance: res.advance.rule, message: res.advance.message } });
+        }
         // A price, stock or delivery setting changed since the page loaded: show the new numbers.
         if (res.cart || res.totals) void reloadCart();
         return;
@@ -267,7 +295,8 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
     );
   }
 
-  const err = (k: CheckoutField) => errors[k];
+  // A blocked number is said once, under the phone field, as soon as the area is chosen.
+  const err = (k: CheckoutField) => errors[k] ?? (k === "phone" ? (blocked ?? undefined) : undefined);
   const invalid = (k: CheckoutField) =>
     err(k) ? { "aria-invalid": true as const, "aria-describedby": `co-${k}-error` } : {};
 
@@ -434,11 +463,16 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
                 </span>
               </label>
             ))}
-            {zone && zone.advanceRule !== "none" && (
-              <p className="text-muted-foreground text-xs">
-                For {zone.name}, {zone.advanceRule === "full" ? "the full amount" : "the delivery charge"} is paid in
-                advance.
-              </p>
+            {ruled?.message ? (
+              <p className="text-muted-foreground text-xs">{ruled.message}</p>
+            ) : (
+              zone &&
+              zone.advanceRule !== "none" && (
+                <p className="text-muted-foreground text-xs">
+                  For {zone.name}, {zone.advanceRule === "full" ? "the full amount" : "the delivery charge"} is paid in
+                  advance.
+                </p>
+              )
             )}
             {zone && methods.length === 0 && (
               <p className="text-destructive text-sm" role="alert">

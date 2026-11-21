@@ -85,6 +85,7 @@ function order(patch: Record<string, unknown> = {}, discount = 0) {
     userAgent: "test",
     now: NOW,
     reservationHours: 24,
+    risk: { score: 30, level: "medium", reasons: ["New customer", "Far zone"] },
   });
 }
 
@@ -176,6 +177,7 @@ describe("the order a checkout becomes", () => {
         userAgent: null,
         now: NOW,
         reservationHours: 24,
+        risk: { score: 0, level: "low", reasons: [] },
       }),
     ).toThrow(/snapshot/);
   });

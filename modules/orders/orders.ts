@@ -1,6 +1,7 @@
 import type { CartLine } from "@/modules/cart/logic";
 import type { CheckoutInput, CheckoutTotals, PaymentMethod } from "@/modules/checkout/checkout";
 import type { WalletType } from "@/modules/payments/payments";
+import type { Risk, RiskLevel } from "./risk";
 
 /**
  * Orders (SRS §3, §7 "orders"). Pure and browser-safe: the order a checkout turns into, its number and
@@ -118,6 +119,7 @@ export type NewOrder = {
   /** Stock held for this order until it is confirmed, or until `until` passes (FR-CO-07). */
   reservation: { active: boolean; until: Date; releasedAt: Date | null };
   riskScore: number;
+  riskLevel: RiskLevel;
   riskReasons: string[];
   source: "web";
   idempotencyKey: string;
@@ -147,6 +149,8 @@ export function buildOrder(input: {
   userAgent: string | null;
   now: Date;
   reservationHours: number;
+  /** The risk score staff see (SRS §2.4). */
+  risk: Risk;
 }): NewOrder {
   const { checkout: c, totals: t, now } = input;
   const advance =
@@ -215,8 +219,9 @@ export function buildOrder(input: {
       until: new Date(now.getTime() + input.reservationHours * 3600_000),
       releasedAt: null,
     },
-    riskScore: 0,
-    riskReasons: [],
+    riskScore: input.risk.score,
+    riskLevel: input.risk.level,
+    riskReasons: input.risk.reasons,
     source: "web",
     idempotencyKey: input.idempotencyKey,
     ip: input.ip,

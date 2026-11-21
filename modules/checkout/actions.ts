@@ -14,10 +14,16 @@ import { checkCoupon } from "@/modules/coupons/data";
 import { normalizeCode, OTP } from "@/modules/otp/rules";
 import { checkCode, sendCode } from "@/modules/otp/service";
 import { productTags, refreshTags, scopeOfProducts } from "@/modules/catalog/store-refresh";
+import { BLOCKED_MESSAGE } from "@/modules/customers/blocks";
+import { blockFor } from "@/modules/customers/data";
+import type { AdvanceRule } from "@/modules/delivery/charge";
+import { getDeliveryConfig } from "@/modules/delivery/data";
+import { assessCheckout } from "@/modules/orders/rules-data";
+import { getPaymentConfig } from "@/modules/payments/data";
 import { rememberReceipt } from "@/modules/orders/data";
 import { normalizeOrderKey } from "@/modules/orders/orders";
 import { findPlacedOrder, placeOrder } from "@/modules/orders/place";
-import type { CheckoutField, CheckoutTotals } from "./checkout";
+import { zoneForArea, type CheckoutField, type CheckoutTotals } from "./checkout";
 import { checkCheckout } from "./data";
 import { CHECKOUT_OTP_PURPOSE, isCheckoutPhoneVerified, rememberVerifiedPhone } from "./phone";
 
@@ -31,6 +37,8 @@ export type CheckoutResult =
       needsCode?: true;
       /** The server's amounts, when they differ from what the page showed. */
       totals?: CheckoutTotals;
+      /** What this order must pay in advance, when that is why it was refused. */
+      advance?: { rule: AdvanceRule; message: string | null };
     };
 
 /**
@@ -129,6 +137,47 @@ export async function checkCouponAction(rawCode: unknown, rawPhone: unknown): Pr
   }
 }
 
+export type CheckoutRulesResponse =
+  { ok: true; advance: AdvanceRule; message: string | null } | { ok: false; error: string; blocked?: true };
+
+/**
+ * Which payment options this order gets (SRS §2.4), asked once the phone and area are filled in: the
+ * zone's rule, or a stricter one from Admin → Order rules (first order to a far zone, a large order…).
+ * The server applies the same rules again when the order is sent.
+ */
+export async function checkoutRulesAction(raw: {
+  phone?: unknown;
+  name?: unknown;
+  areaId?: unknown;
+}): Promise<CheckoutRulesResponse> {
+  try {
+    const { ip } = await requestMeta();
+    const limit = await rateLimit(redis(), `checkout-rules:ip:${ip ?? "unknown"}`, 60, 10 * 60);
+    if (!limit.allowed) return { ok: false, error: "Too many tries. Please wait a few minutes." };
+    const phone = typeof raw.phone === "string" ? normalizeBdPhone(raw.phone) : null;
+    const areaId = typeof raw.areaId === "string" && /^[a-f0-9]{24}$/i.test(raw.areaId) ? raw.areaId : null;
+    if (!phone || !areaId) return { ok: false, error: "Enter your mobile number and area first." };
+    const name = typeof raw.name === "string" ? raw.name.trim().slice(0, 80) : "";
+    const [cart, config, payments] = await Promise.all([loadCart([]), getDeliveryConfig(), getPaymentConfig()]);
+    const zone = zoneForArea(config, areaId);
+    if (!zone) return { ok: false, error: "Sorry, we don't deliver to this area yet" };
+    const res = await assessCheckout({
+      phone,
+      name,
+      ip,
+      subtotal: cart.subtotal,
+      zone,
+      zones: config.zones,
+      walletCount: payments.wallets.length,
+    });
+    if (res.blocked) return { ok: false, error: BLOCKED_MESSAGE, blocked: true };
+    return { ok: true, advance: res.decision.advance, message: res.decision.message };
+  } catch (err) {
+    logger.error({ err }, "checkout rules check failed");
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+}
+
 export type SendCodeResponse =
   | { ok: true; verified: true }
   | { ok: true; verified?: false; resendIn: number; expiresIn: number }
@@ -139,6 +188,8 @@ export async function sendCheckoutCodeAction(rawPhone: unknown): Promise<SendCod
   try {
     const phone = typeof rawPhone === "string" ? normalizeBdPhone(rawPhone) : null;
     if (!phone) return { ok: false, error: "Enter a Bangladeshi mobile number, like 01712345678" };
+    // No code (and no SMS cost) for a number staff blocked.
+    if ((await blockFor(phone))?.kind === "block") return { ok: false, error: BLOCKED_MESSAGE };
     if (await isCheckoutPhoneVerified(phone, await getSession())) return { ok: true, verified: true };
     const { ip } = await requestMeta();
     const store = env().STORE_NAME;

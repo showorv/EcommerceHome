@@ -1,10 +1,14 @@
 import "server-only";
-import { getSession } from "@/modules/auth/session";
+import { getSession, requestMeta } from "@/modules/auth/session";
 import { loadCart } from "@/modules/cart/data";
 import type { CartView } from "@/modules/cart/logic";
 import { checkCoupon } from "@/modules/coupons/data";
 import type { CouponTerms } from "@/modules/coupons/coupons";
+import { BLOCKED_MESSAGE } from "@/modules/customers/blocks";
+import type { AdvanceRule } from "@/modules/delivery/charge";
 import { getDeliveryConfig } from "@/modules/delivery/data";
+import type { RiskDecision } from "@/modules/orders/risk";
+import { assessCheckout } from "@/modules/orders/rules-data";
 import { getPaymentConfig, isTrxIdUsed } from "@/modules/payments/data";
 import { WALLET_NAMES } from "@/modules/payments/payments";
 import {
@@ -39,6 +43,8 @@ export type CheckoutCheck =
       area: string;
       /** The coupon used, as checked now (null without one). */
       coupon: CouponTerms | null;
+      /** Risk score and reasons for staff (SRS §2.4). */
+      risk: RiskDecision;
     }
   | {
       ok: false;
@@ -47,6 +53,8 @@ export type CheckoutCheck =
       cart?: CartView;
       /** Everything else is fine; the phone needs a code first (FR-CO-03). */
       needsCode?: true;
+      /** What this order must pay in advance, when that is why it was refused. */
+      advance?: { rule: AdvanceRule; message: string | null };
     };
 
 export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
@@ -79,7 +87,24 @@ export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
       fields: { areaId: "Sorry, we don't deliver to this area yet" },
     };
   }
-  const methods = availableMethods(zone.advanceRule, payments.wallets.length);
+  // Blocked numbers stop here; the order rules may ask for an advance the zone alone doesn't (SRS §2.4).
+  const { ip } = await requestMeta();
+  const assessed = await assessCheckout({
+    phone: input.phone,
+    name: input.name,
+    ip,
+    subtotal: cart.subtotal,
+    zone,
+    zones: config.zones,
+    walletCount: payments.wallets.length,
+  });
+  if (assessed.blocked) {
+    return { ok: false, error: "Please check your mobile number.", fields: { phone: BLOCKED_MESSAGE } };
+  }
+  const { decision } = assessed;
+  const advance = { rule: decision.advance, message: decision.message };
+
+  const methods = availableMethods(decision.advance, payments.wallets.length);
   if (methods.length === 0) {
     return {
       ok: false,
@@ -91,7 +116,8 @@ export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
     return {
       ok: false,
       error: "Please check the highlighted fields.",
-      fields: { paymentMethod: "This payment option isn't available for your area" },
+      fields: { paymentMethod: decision.message ?? "This payment option isn't available for your area" },
+      advance,
     };
   }
   if (needsAdvance(input.paymentMethod)) {
@@ -154,5 +180,6 @@ export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
     district,
     area: area.name.en,
     coupon,
+    risk: decision,
   };
 }
