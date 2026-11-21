@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { href: "/admin/appearance", label: "Menus & theme" },
   { href: "/admin/pages", label: "Pages" },
   { href: "/admin/delivery", label: "Delivery" },
+  { href: "/admin/payments", label: "Payments" },
   { href: "/admin/messages", label: "Messages" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },

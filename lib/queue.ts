@@ -31,6 +31,22 @@ export function getQueue(name: string): Queue {
   return q;
 }
 
+/**
+ * Login and checkout codes (purpose "otp", "password_reset_otp", "checkout_otp"…) go first and give up
+ * fast: a code that arrives after it expired (5 minutes) is useless. They are also not kept once sent,
+ * so the code doesn't sit in Redis.
+ */
+export const OTP_JOB_OPTIONS = {
+  priority: 1,
+  attempts: 3,
+  backoff: { type: "fixed", delay: 3_000 },
+  removeOnComplete: true,
+  removeOnFail: { age: 3600 },
+} as const;
+
+export const isOtpPurpose = (purpose: string) => /(^|_)otp$/.test(purpose);
+
 export function enqueueNotification(job: NotificationJob) {
-  return getQueue(QUEUE_NAMES.notifications).add(job.kind, job);
+  const opts = isOtpPurpose(job.purpose) ? OTP_JOB_OPTIONS : undefined;
+  return getQueue(QUEUE_NAMES.notifications).add(job.kind, job, opts);
 }

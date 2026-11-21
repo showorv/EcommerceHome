@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeBdPhone } from "@/lib/phone";
+import { normalizeTrxId, WALLET_NAMES, WALLET_TYPES, type WalletType } from "@/modules/payments/payments";
 import type { CartLine } from "@/modules/cart/logic";
 import {
   codFee,
@@ -26,7 +27,7 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const PAYMENT_METHOD_NAMES: Record<PaymentMethod, string> = {
   cod: "Cash on delivery",
   cod_advance: "Delivery charge now, rest on delivery",
-  full: "Pay everything now (bKash / Nagad)",
+  full: "Pay everything now",
 };
 
 /** What a zone's advance rule lets the shopper choose, best first. */
@@ -34,6 +35,16 @@ export function allowedMethods(rule: AdvanceRule): PaymentMethod[] {
   if (rule === "full") return ["full"];
   if (rule === "delivery") return ["cod_advance", "full"];
   return ["cod", "full"];
+}
+
+export const needsAdvance = (m: PaymentMethod) => m !== "cod";
+
+/**
+ * What the shopper can actually choose: the zone's options, minus the advance ones while no bKash /
+ * Nagad wallet is switched on in Admin → Payments. Empty means the area can't order for now.
+ */
+export function availableMethods(rule: AdvanceRule, walletCount: number): PaymentMethod[] {
+  return allowedMethods(rule).filter((m) => walletCount > 0 || !needsAdvance(m));
 }
 
 // ---------- The form ----------
@@ -49,7 +60,7 @@ const text = (min: number, max: number, label: string, what: string) =>
 
 const pick = (message: string) => z.string({ error: message }).regex(/^[a-f0-9]{24}$/i, message);
 
-export const checkoutInput = z.object({
+const checkoutFields = z.object({
   name: text(2, 80, "your full name", "The name"),
   phone: z
     .string({ error: "Enter your mobile number" })
@@ -74,9 +85,53 @@ export const checkoutInput = z.object({
   address: text(10, 250, "the full address", "The address"),
   note: z.string().trim().max(250, "The note is too long").default(""),
   paymentMethod: z.enum(PAYMENT_METHODS, { error: "Choose how you'll pay" }),
+  /** Advance payments only (SRS §2.2): the wallet paid into, the number it was sent from, and the TrxID. */
+  payWallet: z.union([z.enum(WALLET_TYPES), z.literal("")]).default(""),
+  senderNumber: z
+    .string()
+    .trim()
+    .max(20)
+    .default("")
+    .transform((v) => normalizeBdPhone(v) ?? v),
+  trxId: z
+    .string()
+    .trim()
+    .max(30)
+    .default("")
+    .transform((v) => normalizeTrxId(v) ?? v),
   acceptTerms: z.literal(true, { error: "Please accept the terms and return policy" }),
 });
+
+export const checkoutInput = checkoutFields
+  .superRefine((v, ctx) => {
+    if (!needsAdvance(v.paymentMethod)) return;
+    const wallet = v.payWallet ? WALLET_NAMES[v.payWallet] : "wallet";
+    if (!v.payWallet) ctx.addIssue({ code: "custom", path: ["payWallet"], message: "Choose bKash or Nagad" });
+    if (!normalizeBdPhone(v.senderNumber)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["senderNumber"],
+        message: v.senderNumber
+          ? "Enter a Bangladeshi mobile number, like 01712345678"
+          : `Enter the ${wallet} number you sent from`,
+      });
+    }
+    if (!normalizeTrxId(v.trxId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["trxId"],
+        message: v.trxId
+          ? "Check the TrxID: 8–12 letters and digits, as in the payment SMS"
+          : `Enter the TrxID from the ${wallet} SMS`,
+      });
+    }
+  })
+  // Cash on delivery: nothing to keep from the advance fields.
+  .transform((v) =>
+    needsAdvance(v.paymentMethod) ? v : { ...v, payWallet: "" as const, senderNumber: "", trxId: "" },
+  );
 export type CheckoutInput = z.infer<typeof checkoutInput>;
+export type { WalletType };
 export type CheckoutField = keyof CheckoutInput;
 
 /** Field → first problem, for showing errors next to each field. */
@@ -97,7 +152,7 @@ export type CheckoutTotals = {
   delivery: DeliveryQuote;
   codFee: number;
   total: number;
-  /** Paid now by bKash / Nagad (0 for cash on delivery). */
+  /** Paid now by bKash or Nagad (0 for cash on delivery). */
   advanceDue: number;
   /** Collected by the courier at the door. */
   codAmount: number;

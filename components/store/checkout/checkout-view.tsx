@@ -14,9 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { formatTaka } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { submitCheckoutAction } from "@/modules/checkout/actions";
+import { sendCheckoutCodeAction, submitCheckoutAction } from "@/modules/checkout/actions";
 import {
-  allowedMethods,
+  availableMethods,
   checkoutInput,
   checkoutTotals,
   fieldErrors,
@@ -27,6 +27,9 @@ import {
   type PaymentMethod,
 } from "@/modules/checkout/checkout";
 import type { DeliveryData } from "@/modules/delivery/data";
+import { WALLET_NAMES, type Wallet, type WalletType } from "@/modules/payments/payments";
+import { AdvancePayment } from "./advance-payment";
+import { PhoneCodeDialog, type CodeSent } from "./phone-code-dialog";
 
 /**
  * Single-page checkout (FR-CO-02, SRS §2.2): the form on the left, an order summary that updates as the
@@ -42,6 +45,9 @@ type Form = {
   address: string;
   note: string;
   paymentMethod: PaymentMethod | "";
+  payWallet: WalletType | "";
+  senderNumber: string;
+  trxId: string;
   acceptTerms: boolean;
 };
 
@@ -54,6 +60,9 @@ const EMPTY: Form = {
   address: "",
   note: "",
   paymentMethod: "",
+  payWallet: "",
+  senderNumber: "",
+  trxId: "",
   acceptTerms: false,
 };
 
@@ -84,7 +93,7 @@ const useMinuteClock = () => useSyncExternalStore(subscribeMinute, currentMinute
 
 const label = (n: { en: string; bn: string }) => (n.bn ? `${n.en} · ${n.bn}` : n.en);
 
-export function CheckoutView({ config }: { config: DeliveryData }) {
+export function CheckoutView({ config, wallets }: { config: DeliveryData; wallets: Wallet[] }) {
   const { cart, synced } = useCart();
   const router = useRouter();
   const { data: session } = authClient.useSession();
@@ -94,12 +103,15 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
+  const [codeStep, setCodeStep] = useState<{ phone: string; sent: CodeSent; sentAt: number } | null>(null);
   const now = useMinuteClock();
 
   useEffect(() => {
     try {
-      const { acceptTerms: _skip, ...draft } = form;
-      void _skip;
+      // Not the terms tick, and not the TrxID: a transaction ID belongs to one order only.
+      const { acceptTerms: _terms, trxId: _trx, ...draft } = form;
+      void _terms;
+      void _trx;
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
       // Private mode: no draft, the form still works.
@@ -129,8 +141,14 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
     [config.areas, form.districtId],
   );
   const zone = form.areaId ? zoneForArea(config, form.areaId) : null;
-  const methods = zone ? allowedMethods(zone.advanceRule) : allowedMethods("none");
-  const method = form.paymentMethod && methods.includes(form.paymentMethod) ? form.paymentMethod : methods[0]!;
+  const methods = availableMethods(zone?.advanceRule ?? "none", wallets.length);
+  // No option at all: this area needs an advance and no wallet is set up yet (the server says so too).
+  const method =
+    form.paymentMethod && methods.includes(form.paymentMethod) ? form.paymentMethod : (methods[0] ?? "cod");
+  // "bKash / Nagad": only the wallets that are switched on.
+  const walletLabel = wallets.map((w) => WALLET_NAMES[w.type]).join(" / ");
+  const payWallet =
+    form.payWallet && wallets.some((w) => w.type === form.payWallet) ? form.payWallet : (wallets[0]?.type ?? "");
   const lines = cart.lines.filter((l) => l.problem === null);
   const totals =
     zone && lines.length > 0 ? checkoutTotals({ zone, rules: config.rules, lines, paymentMethod: method, now }) : null;
@@ -142,7 +160,7 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
   }
 
   function submit() {
-    const data = { ...form, paymentMethod: method };
+    const data = { ...form, paymentMethod: method, payWallet };
     const local = checkoutInput.safeParse(data);
     if (!local.success) {
       const fe = fieldErrors(local.error);
@@ -155,6 +173,27 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
       const res = await submitCheckoutAction(data).catch(() => null);
       if (!res) {
         setNotice({ kind: "error", text: "Couldn't reach the store. Check your connection and try again." });
+        return;
+      }
+      if (!res.ok && res.needsCode) {
+        // Everything else is right: text a code to the number and ask for it (FR-CO-03).
+        const phone = local.data.phone;
+        const sent = await sendCheckoutCodeAction(phone).catch(() => null);
+        if (!sent) {
+          setNotice({ kind: "error", text: "Couldn't reach the store. Check your connection and try again." });
+          return;
+        }
+        if (sent.ok && sent.verified) {
+          submit();
+          return;
+        }
+        setErrors({});
+        setNotice(null);
+        setCodeStep({
+          phone,
+          sent: sent.ok ? { ok: true, resendIn: sent.resendIn } : sent,
+          sentAt: Math.floor(Date.now() / 1000),
+        });
         return;
       }
       if (!res.ok) {
@@ -229,7 +268,7 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="phone" label="Mobile number" error={err("phone")} hint="We'll call or text to confirm.">
+            <Field id="phone" label="Mobile number" error={err("phone")} hint="We'll text a code to confirm it.">
               <Input
                 id="co-phone"
                 type="tel"
@@ -352,7 +391,10 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
                   className="accent-brand mt-0.5 size-4"
                 />
                 <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">{PAYMENT_METHOD_NAMES[m]}</span>
+                  <span className="text-sm font-medium">
+                    {PAYMENT_METHOD_NAMES[m]}
+                    {m === "full" && walletLabel && ` (${walletLabel})`}
+                  </span>
                   <span className="text-muted-foreground text-xs">{methodHint(m, totals)}</span>
                 </span>
               </label>
@@ -363,13 +405,28 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
                 advance.
               </p>
             )}
-            {method !== "cod" && (
-              <p className="text-muted-foreground text-xs">
-                You&apos;ll send the advance by bKash or Nagad and type the transaction ID (TrxID) at the next step.
+            {zone && methods.length === 0 && (
+              <p className="text-destructive text-sm" role="alert">
+                Orders for {zone.name} need an advance payment, which isn&apos;t set up yet. Please contact us to order.
               </p>
             )}
             {err("paymentMethod") && <FieldError id="paymentMethod" text={err("paymentMethod")!} />}
           </fieldset>
+          {method !== "cod" && methods.length > 0 && (
+            <AdvancePayment
+              wallets={wallets}
+              payWallet={payWallet}
+              senderNumber={form.senderNumber}
+              trxId={form.trxId}
+              amount={totals?.advanceDue ?? null}
+              errors={{ payWallet: err("payWallet"), senderNumber: err("senderNumber"), trxId: err("trxId") }}
+              onChange={(patch) => {
+                if (patch.payWallet) set("payWallet", patch.payWallet);
+                if (patch.senderNumber !== undefined) set("senderNumber", patch.senderNumber);
+                if (patch.trxId !== undefined) set("trxId", patch.trxId);
+              }}
+            />
+          )}
         </Section>
 
         <div className="grid gap-1.5">
@@ -398,7 +455,7 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
         </div>
       </div>
 
-      <Summary cart={cart} totals={totals} zoneName={zone?.name ?? null}>
+      <Summary cart={cart} totals={totals} zoneName={zone?.name ?? null} walletLabel={walletLabel}>
         {notice && (
           <p
             role={notice.kind === "error" ? "alert" : "status"}
@@ -421,6 +478,28 @@ export function CheckoutView({ config }: { config: DeliveryData }) {
           {pending ? "Checking…" : totals ? `Place order · ${formatTaka(totals.total)}` : "Place order"}
         </Button>
       </Summary>
+
+      {codeStep && (
+        <PhoneCodeDialog
+          key={`${codeStep.phone}:${codeStep.sentAt}`}
+          phone={codeStep.phone}
+          sent={codeStep.sent}
+          sentAt={codeStep.sentAt}
+          onVerified={() => {
+            setCodeStep(null);
+            submit();
+          }}
+          onChangeNumber={() => {
+            setCodeStep(null);
+            // After the dialog hands focus back to the button it was opened from.
+            setTimeout(() => document.getElementById("co-phone")?.focus(), 50);
+          }}
+          onClose={() => {
+            setCodeStep(null);
+            setNotice({ kind: "error", text: "Confirm your mobile number with the SMS code to place the order." });
+          }}
+        />
+      )}
     </form>
   );
 }
@@ -435,6 +514,9 @@ function focusFirst(fields: Partial<Record<CheckoutField, string>>) {
     "address",
     "note",
     "paymentMethod",
+    "payWallet",
+    "senderNumber",
+    "trxId",
     "acceptTerms",
   ];
   const first = order.find((k) => fields[k]);
@@ -494,11 +576,13 @@ function Summary({
   cart,
   totals,
   zoneName,
+  walletLabel,
   children,
 }: {
   cart: ReturnType<typeof useCart>["cart"];
   totals: CheckoutTotals | null;
   zoneName: string | null;
+  walletLabel: string;
   children: ReactNode;
 }) {
   const subtotal = totals?.subtotal ?? cart.subtotal;
@@ -553,7 +637,9 @@ function Summary({
         </div>
         {totals && (
           <>
-            {totals.advanceDue > 0 && <Row label="Pay now (bKash / Nagad)" value={formatTaka(totals.advanceDue)} />}
+            {totals.advanceDue > 0 && (
+              <Row label={walletLabel ? `Pay now (${walletLabel})` : "Pay now"} value={formatTaka(totals.advanceDue)} />
+            )}
             <Row label="Pay at the door" value={formatTaka(totals.codAmount)} />
           </>
         )}

@@ -17,6 +17,7 @@ export const TAGS = {
   cmsPage: (slug: string) => `cmsPage:${slug}`, // About, policies, FAQ, Contact…
   cmsPages: "cmsPages", // the list of published CMS pages
   delivery: "delivery", // zones, areas and delivery rules (checkout, delivery preview)
+  payments: "payments", // receiving bKash / Nagad wallets (checkout)
 } as const;
 
 const FIXED_TAGS = new Set<string>([
@@ -26,6 +27,7 @@ const FIXED_TAGS = new Set<string>([
   TAGS.design,
   TAGS.cmsPages,
   TAGS.delivery,
+  TAGS.payments,
 ]);
 const KEYED_TAG = /^(product|category|collection|page|cmsPage):[a-z0-9][a-z0-9-]{0,199}$/;
 

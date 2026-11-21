@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { CheckoutView } from "@/components/store/checkout/checkout-view";
 import { getDeliveryConfig } from "@/modules/delivery/data";
+import { getPaymentConfig } from "@/modules/payments/data";
 
 /**
- * Checkout (FR-CO-02). The frame and the delivery areas are built once (cached until the delivery
- * settings change); the cart and the form live in the browser. Kept out of search engines.
+ * Checkout (FR-CO-02). The frame, the delivery areas and the receiving wallets are built once (cached
+ * until the delivery or payment settings change); the cart and the form live in the browser. Kept out
+ * of search engines.
  */
 
 export const metadata: Metadata = {
@@ -13,11 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default async function CheckoutPage() {
-  const config = await getDeliveryConfig();
+  const [config, payments] = await Promise.all([getDeliveryConfig(), getPaymentConfig()]);
   return (
     <div className="mx-auto max-w-6xl px-4 pt-6 pb-16">
       <h1 className="mb-6 text-2xl font-bold tracking-tight md:text-3xl">Checkout</h1>
-      <CheckoutView config={config} />
+      <CheckoutView config={config} wallets={payments.wallets} />
     </div>
   );
 }

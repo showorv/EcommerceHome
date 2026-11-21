@@ -108,8 +108,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.1 Locations (division/district/area) seed data + delivery zones and charge rules in admin (FR-AD-08)
 - [x] 2.2 Cart: drawer + page, guest persistence, merge on sign-in (FR-CO-01)
 - [x] 2.3 Checkout form with live totals and zone/weight delivery charge (FR-CO-02, SRS §2.2–2.3)
-- [ ] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
-- [ ] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
+- [x] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
+- [x] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
 - [ ] 2.6 Coupons (FR-CO-04)
 - [ ] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
 - [ ] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
@@ -272,6 +272,23 @@ http://localhost:3000/admin with your email and password.
   land in spam or get rejected. Restart `pnpm worker` after changing these; the worker is the process that sends.
   Brevo or Amazon SES work the same way with their own host, user and password.
 
+### SMS: local vs real
+
+- **Locally, no SMS leaves your computer.** `SMS_PROVIDER=console` prints every message, including checkout
+  and login codes, in the `pnpm worker` output.
+- **To send real SMS**, set these in the server's env and restart `pnpm worker`:
+
+  ```bash
+  SMS_PROVIDER=alpha           # Alpha SMS (sms.net.bd), a BTRC-listed A2P provider
+  ALPHA_SMS_API_KEY=xxx        # from the Alpha SMS panel → API
+  SMS_SENDER_ID=YOURBRAND      # optional: your approved masking name; empty = numeric sender
+  # SMS_FALLBACK_PROVIDER=     # optional second provider, tried when the first one fails
+  ```
+
+  A bad key, a bad number or blocked text stops at once and shows in the failed list at `/admin/system`; a
+  network error, low balance or a provider outage is retried. Codes are tried 3 times within about 10
+  seconds and never kept after sending.
+
 ### Security notes for later phases
 
 - **Production database user:** give the app's MongoDB user `insert` + `find` only on `auditLogs` (no update/delete), so the audit log stays append-only even if the app is compromised.
@@ -284,6 +301,84 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-21 · Phase 2.5 — bKash / Nagad advance payments
+
+- New **Admin → Payments** page (Owner only, `settings.manage`): one card each for **bKash** and
+  **Nagad** with an on/off switch, the receiving number, an optional account name, whether customers
+  choose **Send Money** or **Make Payment** (a bKash Personal Retail Account usually takes Make
+  Payment), and an optional QR image. A wallet can't be switched on without a number. Saving is in the
+  audit log and checkout updates right away.
+- **Checkout**, when the shopper picks "Delivery charge now" or "Pay everything now":
+  - choose bKash or Nagad (only the wallets that are on)
+  - short steps: open the app, choose Send Money / Make Payment, send **the exact advance** to the
+    number (with a copy button and the account name), or scan the QR
+  - **Your bKash/Nagad number** (sent from) and the **Transaction ID (TrxID)** from the payment SMS
+- **Checks (FR-CO-05):**
+  - The sender number must be a Bangladeshi mobile number.
+  - The TrxID must be 8–12 letters and digits. Spaces and lower case are fine; it is saved in upper
+    case.
+  - **A TrxID already on another order is refused.** Orders arrive in 2.7, which also adds a unique
+    index so two orders placed at the same moment can't share one.
+  - The server also checks the chosen wallet is still switched on.
+- **No wallet switched on** → checkout offers cash on delivery only. An area whose zone needs an
+  advance then says it can't order yet and to contact you.
+- The payment labels name only the wallets that are on, e.g. "Pay everything now (bKash)".
+- The TrxID is not kept in the browser draft, since a TrxID belongs to one order.
+- Checked in the browser:
+  - Switching bKash on with no number was refused.
+  - With a test bKash wallet, checkout showed ৳1,520, the number, the account name and the QR.
+  - Empty fields gave a message at each.
+  - A TrxID already on a (temporary, fake) order was refused, even typed in lower case with spaces.
+    A new TrxID passed.
+  - Switching bKash off left cash on delivery only.
+  - Phone size works.
+- The test wallet settings, the fake order, the test cart, browser draft and the 3 audit entries were
+  removed. 12 new tests (188 total); lint, types, formatting and build pass.
+- **For you:** before launch, enter your real bKash (and/or Nagad) receiving number in Admin →
+  Payments, and upload its QR from the bKash/Nagad app. The SRS's optional small discount for paying
+  everything in advance isn't in; say if you want it.
+- Committed.
+
+**Next:** Phase 2.6 — coupons.
+
+### 2026-11-21 · Phase 2.4 — SMS provider and phone code at checkout
+
+- **SMS provider:** messages now go through Alpha SMS (sms.net.bd), a BTRC-listed Bangladeshi gateway,
+  when `SMS_PROVIDER=alpha` is set; locally they are still printed in the worker log. A second provider
+  can be set as a fallback. See "SMS: local vs real" above for the settings.
+- **Phone code at checkout (FR-CO-03):** when everything else on the form is right, **Place order**
+  texts a 6-digit code to the number and asks for it in a small window. The code is checked as soon as
+  all six digits are typed (Bangla digits work too), and the order then goes through on its own.
+  - A code works for **5 minutes** and **5 tries**. Only the newest code works, and it is stored as a
+    keyed hash, never as the digits.
+  - **Limits (SRS §5):** a new code can be asked for after 1 minute (the window counts down), at most 3
+    per number per 10 minutes and 10 per connection per hour. Checks are limited to 30 per 10 minutes
+    per connection, across all numbers.
+  - Once confirmed, the number stays confirmed in that browser for an hour, so changing the address or
+    payment doesn't ask again. A different number asks again.
+  - **Signed-in customers whose account already has this number verified skip the code.**
+  - **Change number** closes the window and puts the cursor in the phone field.
+- Code SMS jobs go to the front of the queue, give up after 3 quick tries (a late code is useless) and
+  are not kept in Redis once sent. Login and password-reset codes get the same treatment.
+- Checked in the browser:
+  - A wrong code showed "4 tries left". The right code confirmed the number, and the order check passed.
+  - Sending again didn't ask; a new number asked again.
+  - Reopening within a minute showed "We sent you a code a moment ago" and the countdown. **Send a new
+    code** worked after it.
+  - The phone layout works.
+- A script against the local database checked the limits: the wait between sends, 5 wrong tries using
+  up a code, a used code being refused, an expired code, and the 4th send to a number in 10 minutes
+  being refused.
+- The test's codes, rate-limit counters, cart and browser draft were removed. 13 new tests (176 total);
+  lint, types, formatting and build pass.
+- **For you:**
+  - The two `pnpm worker` processes I started earlier still run the old worker code; I wasn't allowed to
+    stop them. They print dev SMS the same way. Restart the worker (one is enough) to use the new
+    provider code.
+  - Before launch: an Alpha SMS account with balance, its API key, and (optional) an approved masking
+    name. Bot protection on code requests (Turnstile, SRS §5) is not in yet.
+- Committed.
 
 ### 2026-11-21 · Phase 2.3 — Checkout form with live totals
 
@@ -323,8 +418,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   14:54 in another browser). I put it back exactly from the database's change log. 10 new tests (163
   total); lint, types, formatting and build pass.
 - Committed.
-
-**Next:** Phase 2.4 — SMS provider and phone OTP at checkout.
 
 ### 2026-11-21 · Phase 2.2 — Cart
 

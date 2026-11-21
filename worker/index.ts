@@ -1,11 +1,11 @@
 import "./load-env";
-import { Worker, type Job } from "bullmq";
+import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
 import { bullConnection } from "@/lib/redis";
 import { sendEmail } from "@/modules/notifications/email";
-import { smsProvider } from "@/modules/notifications/sms";
+import { smsProvider, SmsSendError } from "@/modules/notifications/sms";
 
 /**
  * Background worker (SRS §6.1). Run with `pnpm worker`.
@@ -17,8 +17,13 @@ env(); // fail fast on bad configuration
 async function handleNotification(job: Job<NotificationJob>) {
   const data = job.data;
   if (data.kind === "sms") {
-    const res = await smsProvider().send(data.to, data.text);
-    return { provider: smsProvider().name, ...res };
+    try {
+      return await smsProvider().send(data.to, data.text);
+    } catch (err) {
+      // A bad key, number or text won't get better by retrying: stop now, keep the job in the failed list.
+      if (err instanceof SmsSendError && err.permanent) throw new UnrecoverableError(err.message);
+      throw err;
+    }
   }
   const res = await sendEmail({ to: data.to, subject: data.subject, text: data.text, html: data.html });
   return { provider: "smtp", ...res };
