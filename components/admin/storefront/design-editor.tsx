@@ -28,6 +28,8 @@ import {
 import type { DesignState } from "@/modules/storefront/design-data";
 import {
   BANGLA_FONTS,
+  chatLinks,
+  chatSchema,
   designProblem,
   FONTS,
   RADII,
@@ -35,6 +37,7 @@ import {
   SOCIAL_NETWORKS,
   textOn,
   themeContrast,
+  type Chat,
   type Design,
   type MenuItem,
   type Navigation,
@@ -46,7 +49,7 @@ import { Choice, ItemList, Text } from "./section-editors";
 
 /**
  * Menus & theme editor (FR-SF-02, FR-SF-03, FR-AD-07): header menu with mega-menus, footer and social
- * links, announcement bar, colours, fonts, corners, light/dark, motion, logo and favicon. Changes stay in
+ * links, announcement bar, chat button, colours, fonts, corners, light/dark, motion, logo and favicon. Changes stay in
  * a draft (previewed beside the editor) until published.
  */
 
@@ -87,6 +90,7 @@ export function DesignEditor({
 
   const setNav = (navigation: Navigation) => setDesign((d) => ({ ...d, navigation }));
   const setTheme = (theme: Theme) => setDesign((d) => ({ ...d, theme }));
+  const setChat = (chat: Chat) => setDesign((d) => ({ ...d, chat }));
 
   function run(fn: () => Promise<DesignResult>, sent: Design | null, after?: () => void) {
     start(async () => {
@@ -178,6 +182,7 @@ export function DesignEditor({
             <TabsTrigger value="header">Header menu</TabsTrigger>
             <TabsTrigger value="footer">Footer</TabsTrigger>
             <TabsTrigger value="announcement">Announcement bar</TabsTrigger>
+            <TabsTrigger value="chat">Chat button</TabsTrigger>
             <TabsTrigger value="theme">Theme</TabsTrigger>
           </TabsList>
           <TabsContent value="header" className="mt-4">
@@ -201,6 +206,9 @@ export function DesignEditor({
               onChange={(announcement) => setNav({ ...design.navigation, announcement })}
               linksId={linksId}
             />
+          </TabsContent>
+          <TabsContent value="chat" className="mt-4">
+            <ChatEditor value={design.chat} onChange={setChat} />
           </TabsContent>
           <TabsContent value="theme" className="mt-4">
             <ThemeEditor theme={design.theme} onChange={setTheme} />
@@ -606,6 +614,105 @@ function AnnouncementEditor({
           />
         </Field>
       </div>
+    </Card>
+  );
+}
+
+// ---------- Chat button ----------
+
+function ChatEditor({ value: c, onChange }: { value: Chat; onChange: (c: Chat) => void }) {
+  // What the store will link to once saved (numbers typed the local way get the country code). The
+  // store adds the shopper's page address to the message; the test link has only the greeting.
+  const parsed = chatSchema.safeParse(c);
+  const links = parsed.success ? chatLinks(parsed.data) : null;
+  return (
+    <Card
+      title="Chat button"
+      description="A round button in the bottom corner of every store page that opens WhatsApp or Messenger."
+    >
+      <label className="flex items-center gap-3 text-sm font-medium">
+        <Switch checked={c.enabled} onCheckedChange={(enabled) => onChange({ ...c, enabled })} />
+        Show the chat button
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Text
+          id="chat-wa"
+          label="WhatsApp number"
+          value={c.whatsapp}
+          onChange={(whatsapp) => onChange({ ...c, whatsapp })}
+          max={24}
+          placeholder="01712345678"
+          hint="The number your WhatsApp (Business) app uses. Leave empty to show only Messenger."
+        />
+        <Text
+          id="chat-fb"
+          label="Facebook page (Messenger)"
+          value={c.messenger}
+          onChange={(messenger) => onChange({ ...c, messenger })}
+          max={200}
+          placeholder="mystore.bd"
+          hint="Your page’s username or its facebook.com link. Leave empty to show only WhatsApp."
+        />
+      </div>
+      <Text
+        id="chat-greeting"
+        label="Message typed for the shopper (WhatsApp)"
+        value={c.greeting}
+        onChange={(greeting) => onChange({ ...c, greeting })}
+        max={200}
+        multiline
+        rows={2}
+        hint="WhatsApp opens with this ready to send; the shopper can change it."
+      />
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={c.pageLink} onCheckedChange={(v) => onChange({ ...c, pageLink: v === true })} />
+        Add the page they are on (so you know which product they mean)
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Text
+          id="chat-label"
+          label="Button text (computers)"
+          value={c.label}
+          onChange={(label) => onChange({ ...c, label })}
+          max={30}
+          hint="Phones show only the icon."
+        />
+        <Choice
+          id="chat-position"
+          label="Corner"
+          value={c.position}
+          onChange={(position) => onChange({ ...c, position })}
+          options={[
+            ["right", "Bottom right"],
+            ["left", "Bottom left"],
+          ]}
+        />
+      </div>
+      {links && (links.whatsapp || links.messenger) && (
+        <div className="text-muted-foreground grid gap-1 text-xs">
+          <p>Try the links before publishing:</p>
+          {links.whatsapp && (
+            <a
+              href={links.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand break-all underline"
+            >
+              {links.whatsapp}
+            </a>
+          )}
+          {links.messenger && (
+            <a
+              href={links.messenger}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand break-all underline"
+            >
+              {links.messenger}
+            </a>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

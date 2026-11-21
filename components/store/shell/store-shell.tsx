@@ -6,14 +6,15 @@ import { MotionProvider } from "@/components/motion/motion-provider";
 import { HeaderSearch, HeaderSearchFallback } from "@/components/store/header-search";
 import { QuickViewHost } from "@/components/store/quick-view";
 import { getCategoryTree } from "@/modules/catalog/category-tree";
-import { SOCIAL_NAMES, themeCss, type Design, type MenuItem } from "@/modules/storefront/design";
+import { chatLive, SOCIAL_NAMES, themeCss, type Design, type MenuItem } from "@/modules/storefront/design";
 import { AnnouncementBar } from "./announcement-bar";
+import { ChatButton } from "./chat-button";
 import { DesktopNav } from "./desktop-nav";
 import { MobileMenu } from "./mobile-menu";
 import { SocialIcon } from "./social-icons";
 
 /**
- * Store frame: theme, announcement bar, header with menus, footer (FR-SF-02, FR-SF-03, FR-SF-04).
+ * Store frame: theme, announcement bar, header with menus, footer, chat button (FR-SF-02/03/04/10).
  * Used by the store layout with the published design, and by the draft preview with the draft.
  */
 export async function StoreShell({
@@ -82,6 +83,7 @@ export async function StoreShell({
         </header>
         <main className="flex-1">{children}</main>
         <Footer design={design} name={name} />
+        {chatLive(design.chat) && <ChatButton chat={design.chat} />}
         {/* Reads ?product= from the URL, so it renders in the browser only (the page itself stays static). */}
         <Suspense fallback={null}>
           <QuickViewHost />

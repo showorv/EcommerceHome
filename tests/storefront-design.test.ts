@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   announcementLive,
   announcementNextChange,
+  chatLinks,
+  chatLive,
+  chatSchema,
   cleanDesign,
+  designProblem,
   contrast,
   DARK_TOKENS,
   defaultDesign,
@@ -114,5 +118,56 @@ describe("theme", () => {
     const dark = block(":root:not(.light) {");
     for (const [k, v] of Object.entries(LIGHT_TOKENS)) expect(light, k).toContain(`--${k}: ${v};`);
     for (const [k, v] of Object.entries(DARK_TOKENS)) expect(dark, k).toContain(`--${k}: ${v};`);
+  });
+});
+
+describe("chat button (1.14)", () => {
+  const chat = (c: Record<string, unknown>) => chatSchema.parse(c);
+
+  it("is off by default and old designs get the default", () => {
+    expect(defaultDesign().chat.enabled).toBe(false);
+    expect(cleanDesign({ navigation: {}, theme: {} }).chat).toEqual(chatSchema.parse({}));
+    expect(chatLive(chatSchema.parse({}))).toBe(false);
+  });
+
+  it("turns any way of typing a number into wa.me digits", () => {
+    expect(chat({ whatsapp: "01712-345 678" }).whatsapp).toBe("8801712345678");
+    expect(chat({ whatsapp: "+880 1712 345678" }).whatsapp).toBe("8801712345678");
+    expect(chat({ whatsapp: "008801712345678" }).whatsapp).toBe("8801712345678");
+    expect(chat({ whatsapp: "+44 7911 123456" }).whatsapp).toBe("447911123456");
+    expect(chatSchema.safeParse({ whatsapp: "01212345678" }).success).toBe(false);
+    expect(chatSchema.safeParse({ whatsapp: "call me" }).success).toBe(false);
+  });
+
+  it("takes a Facebook page as a username or a link", () => {
+    for (const v of [
+      "mystore.bd",
+      "@mystore.bd",
+      "https://www.facebook.com/mystore.bd/",
+      "m.me/mystore.bd",
+      "fb.com/mystore.bd?ref=x",
+    ]) {
+      expect(chat({ messenger: v }).messenger, v).toBe("mystore.bd");
+    }
+    expect(chatSchema.safeParse({ messenger: "my store" }).success).toBe(false);
+    expect(chatSchema.safeParse({ messenger: "javascript:alert(1)" }).success).toBe(false);
+  });
+
+  it("needs somewhere to go when switched on", () => {
+    expect(designProblem({ chat: { enabled: true } })).toMatch(/^Chat button: Add a WhatsApp number/);
+    expect(designProblem({ chat: { enabled: true, messenger: "mystore.bd" } })).toBeNull();
+  });
+
+  it("builds the links, adding the page only when asked", () => {
+    const c = chat({ enabled: true, whatsapp: "01712345678", messenger: "mystore.bd", greeting: "Hi & hello" });
+    const l = chatLinks(c, "https://shop.example/p/chopper");
+    expect(l.whatsapp).toBe(
+      "https://wa.me/8801712345678?text=" + encodeURIComponent("Hi & hello\nhttps://shop.example/p/chopper"),
+    );
+    expect(l.messenger).toBe("https://m.me/mystore.bd");
+    expect(chatLinks({ ...c, pageLink: false }, "https://x/p/y").whatsapp).toBe(
+      "https://wa.me/8801712345678?text=" + encodeURIComponent("Hi & hello"),
+    );
+    expect(chatLinks({ ...c, greeting: "", pageLink: false }).whatsapp).toBe("https://wa.me/8801712345678");
   });
 });

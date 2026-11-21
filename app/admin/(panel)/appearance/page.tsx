@@ -17,7 +17,7 @@ export default async function AppearancePage() {
     <div className="grid gap-6">
       <PageHeader
         title="Menus & theme"
-        description="Header menu, footer, announcement bar, colours, fonts and logo. Changes stay in a draft until you publish them."
+        description="Header menu, footer, announcement bar, chat button, colours, fonts and logo. Changes stay in a draft until you publish them."
       />
       <DesignEditor
         initial={state}

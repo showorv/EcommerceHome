@@ -86,6 +86,78 @@ export type MenuLink = z.infer<typeof link>;
 /** A top item opens a mega-menu when any column has links; plain dropdown when it only has columns. */
 export const isMega = (item: MenuItem) => item.children.some((c) => c.children.length > 0);
 
+// ---------- Chat button (FR-SF-10) ----------
+
+/**
+ * WhatsApp number as wa.me wants it: country code and number, digits only. A Bangladeshi mobile number
+ * typed the local way (01712345678) gets 88 in front.
+ */
+const whatsappNumber = z
+  .string()
+  .trim()
+  .max(24)
+  .default("")
+  .transform((v) =>
+    v
+      .replace(/[\s().-]/g, "")
+      .replace(/^\+/, "")
+      .replace(/^00/, ""),
+  )
+  .refine((v) => v === "" || /^\d{10,15}$/.test(v), "Type the WhatsApp number with digits only, like 01712345678")
+  .refine(
+    (v) => !v.startsWith("0") || /^01[3-9]\d{8}$/.test(v),
+    "A Bangladeshi mobile number has 11 digits and starts with 013–019",
+  )
+  .transform((v) => (/^01[3-9]\d{8}$/.test(v) ? `88${v}` : v));
+
+/** Facebook page for Messenger (m.me/<page>): the page's username or number, from a link or typed. */
+const messengerPage = z
+  .string()
+  .trim()
+  .max(200)
+  .default("")
+  .transform((v) =>
+    v
+      .replace(/^(https?:\/\/)?(www\.|m\.|web\.)?(facebook\.com|fb\.com|m\.me)\//i, "")
+      .replace(/^@/, "")
+      .replace(/[/?#].*$/, ""),
+  )
+  .refine(
+    (v) => v === "" || /^[A-Za-z0-9.-]{3,80}$/.test(v),
+    "Type your Facebook page’s username, like mystore.bd (the part after facebook.com/)",
+  );
+
+export const chatSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    whatsapp: whatsappNumber,
+    messenger: messengerPage,
+    /** Typed into WhatsApp for the shopper, ready to send. */
+    greeting: text(200).default("Hi! I have a question about your products."),
+    /** Adds the page the shopper is on (e.g. the product) to the WhatsApp message. */
+    pageLink: z.boolean().default(true),
+    label: text(30).default("Chat with us"),
+    position: z.enum(["right", "left"]).default("right"),
+  })
+  .refine((c) => !c.enabled || Boolean(c.whatsapp || c.messenger), {
+    message: "Add a WhatsApp number or a Facebook page, or switch the chat button off",
+    path: ["whatsapp"],
+  });
+export type Chat = z.infer<typeof chatSchema>;
+
+/** Shown when the button is on and has somewhere to go. */
+export const chatLive = (c: Chat) => c.enabled && Boolean(c.whatsapp || c.messenger);
+
+/** Where each chat option goes. `pageUrl` is added to the WhatsApp message when pageLink is on. */
+export function chatLinks(c: Chat, pageUrl?: string): { whatsapp: string | null; messenger: string | null } {
+  let whatsapp: string | null = null;
+  if (c.whatsapp) {
+    const message = [c.greeting, c.pageLink ? pageUrl : ""].filter(Boolean).join("\n");
+    whatsapp = `https://wa.me/${c.whatsapp}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
+  }
+  return { whatsapp, messenger: c.messenger ? `https://m.me/${encodeURIComponent(c.messenger)}` : null };
+}
+
 // ---------- Theme ----------
 
 /** Fonts the store can use. Each is bundled at build time; the theme only picks one. */
@@ -129,6 +201,7 @@ export type Theme = z.infer<typeof themeSchema>;
 export const designSchema = z.object({
   navigation: navigationSchema.default(navigationSchema.parse({})),
   theme: themeSchema.default(themeSchema.parse({})),
+  chat: chatSchema.default(chatSchema.parse({})),
 });
 export type Design = z.infer<typeof designSchema>;
 
@@ -141,11 +214,13 @@ export function designProblem(raw: unknown): string | null {
   const where =
     top === "theme"
       ? "Theme"
-      : part === "footer"
-        ? "Footer"
-        : part === "announcement"
-          ? "Announcement bar"
-          : "Header menu";
+      : top === "chat"
+        ? "Chat button"
+        : part === "footer"
+          ? "Footer"
+          : part === "announcement"
+            ? "Announcement bar"
+            : "Header menu";
   return `${where}: ${issue?.message ?? "check the settings"}`;
 }
 
@@ -157,9 +232,11 @@ export function cleanDesign(raw: unknown): Design {
   if (r.success) return r.data;
   const nav = navigationSchema.safeParse((raw as { navigation?: unknown })?.navigation ?? {});
   const theme = themeSchema.safeParse((raw as { theme?: unknown })?.theme ?? {});
+  const chat = chatSchema.safeParse((raw as { chat?: unknown })?.chat ?? {});
   return {
     navigation: nav.success ? nav.data : navigationSchema.parse({}),
     theme: theme.success ? theme.data : themeSchema.parse({}),
+    chat: chat.success ? chat.data : chatSchema.parse({}),
   };
 }
 

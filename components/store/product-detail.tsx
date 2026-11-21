@@ -115,6 +115,7 @@ export function ProductDetail({ product }: { product: ProductView }) {
         )}
         aria-hidden={!showBar}
         inert={!showBar}
+        data-buy-bar={showBar ? "shown" : "hidden"}
       >
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">

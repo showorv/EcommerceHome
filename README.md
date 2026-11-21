@@ -98,7 +98,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 1.11 Navigation + theme editor: header, mega-menu, footer, announcement bar, colours, fonts, motion level (FR-SF-02, 03)
 - [x] 1.12 CMS pages with block editor (About, Privacy, Terms, Returns, Shipping, FAQ, Contact) (FR-SF-09)
 - [x] 1.13 Scroll motion: reveal, page transitions, parallax hero, GSAP pinned story section, lazy-loaded (FR-SF-04, NFR-PF-02/03)
-- [ ] 1.14 WhatsApp / Messenger floating button (FR-SF-10)
+- [x] 1.14 WhatsApp / Messenger floating button (FR-SF-10)
 - [ ] 1.15 ISR + on-demand revalidation when admin saves content (NFR-SC-02)
 
 **Done when:** a manager adds a product with 6 images + 2 videos and sees it live within 1 minute without redeploy, and can rearrange home-page sections with preview.
@@ -284,6 +284,27 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-21 · Phase 1.14 — WhatsApp / Messenger chat button
+
+- **Menus & theme → Chat button** (new tab): switch it on, add your **WhatsApp number** (type it any way:
+  01712345678, +880 1712-345678… it is stored as 8801712345678) and/or your **Facebook page** (username
+  or the facebook.com link). Also: the message WhatsApp opens with, whether to add the page the shopper
+  is on (so you see which product they mean), the button text on computers, and the corner. Test links
+  appear under the form. Like the rest of Menus & theme it is a draft until you publish.
+- **On the store:** a round button in the bottom corner of every page. One channel opens it directly;
+  with both, it opens a small WhatsApp / Messenger menu (Escape or a tap elsewhere closes it). Phones
+  show only the icon; computers show the text too. On product pages it moves up while the phone buy
+  bar is showing. Hidden when printing.
+- Checked on a production build with sample numbers on a temporary page (removed): links, page address
+  added at the click, menu open/close, phone size, buy-bar clearance. Checked the admin tab on your dev
+  server without saving; your design is unchanged. 5 new tests (125 total); lint, types, formatting and
+  build pass.
+- **You need to:** open Menus & theme → Chat button, add your number and/or page, try the links,
+  publish. Restart `npm run dev` first (it still serves the old stylesheet).
+- Committed.
+
+**Next:** Phase 1.15 — ISR + on-demand revalidation when admin saves content.
 
 ### 2026-11-21 · Phase 1.13 — Scroll motion
 
