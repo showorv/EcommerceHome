@@ -10,6 +10,7 @@ import { useMotionLevel } from "@/components/motion/motion-provider";
 import { formatTaka } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { CardMedia, CardProduct } from "@/modules/catalog/storefront";
+import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LABELS, LOUD_LABELS } from "./labels";
 import { prefetchQuickView, useOpenQuickView } from "./quick-view";
 
@@ -52,6 +53,9 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
   }
   const prefetch = () => prefetchQuickView(product.slug);
   const title = product.title.en;
+  // One option and in stock: the card adds it straight to the cart. Otherwise quick view picks options.
+  const oneClick = product.inStock && product.variantCount === 1;
+  const adding = useCartAdding();
 
   function onEnter(e: PointerEvent) {
     if (e.pointerType !== "mouse") return;
@@ -192,7 +196,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           animate={active ? "active" : "rest"}
           transition={reduce || level === "off" ? { duration: 0 } : SPRING}
         >
-          {/* "Options" opens quick view to choose a variant; one-click Add to cart arrives with the cart (2.2). */}
+          {/* "Options" opens quick view to choose a variant; a single-option product goes straight to the cart. */}
           <Link
             href={href}
             onClick={quickView}
@@ -203,19 +207,32 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           >
             <Eye className="size-4" aria-hidden /> Quick view
           </Link>
-          <Link
-            href={href}
-            onClick={product.inStock && product.variantCount > 1 ? quickView : undefined}
-            onPointerEnter={prefetch}
-            className={cn(
-              "bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none",
-              !product.inStock && "bg-muted text-muted-foreground hover:bg-muted",
-            )}
-            aria-label={`${product.inStock ? (product.variantCount > 1 ? "Choose options" : "Buy") : "View"}: ${title}`}
-          >
-            <ShoppingBag className="size-4" aria-hidden />
-            {!product.inStock ? "View" : product.variantCount > 1 ? "Options" : "Buy now"}
-          </Link>
+          {oneClick ? (
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() => void addToCart({ productId: product.id })}
+              className="bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none disabled:opacity-70"
+              aria-label={`Add to cart: ${title}`}
+            >
+              <ShoppingBag className="size-4" aria-hidden />
+              Add to cart
+            </button>
+          ) : (
+            <Link
+              href={href}
+              onClick={product.inStock ? quickView : undefined}
+              onPointerEnter={prefetch}
+              className={cn(
+                "bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none",
+                !product.inStock && "bg-muted text-muted-foreground hover:bg-muted",
+              )}
+              aria-label={`${product.inStock ? "Choose options" : "View"}: ${title}`}
+            >
+              <ShoppingBag className="size-4" aria-hidden />
+              {product.inStock ? "Options" : "View"}
+            </Link>
+          )}
         </motion.div>
       </div>
 

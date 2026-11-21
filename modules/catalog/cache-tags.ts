@@ -16,9 +16,17 @@ export const TAGS = {
   design: "design", // menus, footer, announcement bar, theme
   cmsPage: (slug: string) => `cmsPage:${slug}`, // About, policies, FAQ, Contact…
   cmsPages: "cmsPages", // the list of published CMS pages
+  delivery: "delivery", // zones, areas and delivery rules (checkout, delivery preview)
 } as const;
 
-const FIXED_TAGS = new Set<string>([TAGS.catalog, TAGS.productLists, TAGS.navigation, TAGS.design, TAGS.cmsPages]);
+const FIXED_TAGS = new Set<string>([
+  TAGS.catalog,
+  TAGS.productLists,
+  TAGS.navigation,
+  TAGS.design,
+  TAGS.cmsPages,
+  TAGS.delivery,
+]);
 const KEYED_TAG = /^(product|category|collection|page|cmsPage):[a-z0-9][a-z0-9-]{0,199}$/;
 
 /** A tag the store actually uses (the revalidate endpoint accepts nothing else). */

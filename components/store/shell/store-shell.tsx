@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { CartButton, CartDrawer } from "@/components/store/cart/cart-drawer";
 import { HeaderSearch, HeaderSearchFallback } from "@/components/store/header-search";
 import { QuickViewHost } from "@/components/store/quick-view";
 import { getCategoryTree } from "@/modules/catalog/category-tree";
@@ -71,6 +72,7 @@ export async function StoreShell({
               <Link href="/account" className="text-muted-foreground hover:text-foreground hidden sm:inline">
                 Account
               </Link>
+              <CartButton />
             </nav>
           </div>
           {items.length > 0 && (
@@ -88,6 +90,7 @@ export async function StoreShell({
         <Suspense fallback={null}>
           <QuickViewHost />
         </Suspense>
+        <CartDrawer />
       </div>
     </MotionProvider>
   );

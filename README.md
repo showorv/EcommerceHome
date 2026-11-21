@@ -105,8 +105,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 ### Phase 2 — Orders (launch-critical, 3–4 weeks)
 
-- [ ] 2.1 Locations (division/district/area) seed data + delivery zones and charge rules in admin (FR-AD-08)
-- [ ] 2.2 Cart: drawer + page, guest persistence, merge on sign-in (FR-CO-01)
+- [x] 2.1 Locations (division/district/area) seed data + delivery zones and charge rules in admin (FR-AD-08)
+- [x] 2.2 Cart: drawer + page, guest persistence, merge on sign-in (FR-CO-01)
 - [ ] 2.3 Checkout form with live totals and zone/weight delivery charge (FR-CO-02, SRS §2.2–2.3)
 - [ ] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
 - [ ] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
@@ -285,6 +285,71 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-21 · Phase 2.2 — Cart
+
+- **Add to cart works everywhere:** on the product page, in quick view, and on product cards. A card
+  adds a product straight to the cart when it has only one option; otherwise "Options" opens quick view.
+  Adding opens a **slide-out cart** from the right. **Order now** on the product page adds and goes to
+  the cart page, and will go to the checkout once that exists (2.3).
+- **Header cart button** with the number of items, and a full **cart page** at `/cart`:
+  - change quantities, remove products, see each line's total, the subtotal and an order summary
+  - "Add ৳… more for free delivery" with a progress bar, when Admin → Delivery has a store-wide
+    free-delivery amount
+  - lines that can't be ordered say why: no longer on sale, sold out, or "Only N available"
+- **Prices and stock are always read fresh on the server.** The cart stores only which product option
+  and how many, never a price. Nobody can add more than is in stock, or more than 10 of one item.
+- **Guests keep their cart** for 30 days (a private cookie plus a copy in the browser, which also brings
+  the cart back if the cookie is lost). **Signing in merges** the guest cart into the account's cart:
+  the same product adds up. Signing out leaves the cart with the account, and the browser starts empty.
+  Account carts are kept for 180 days; old carts are removed automatically.
+- Checked in the browser:
+  - Signed in, 2 Red added from the product page, +1 in the cart, and the cart page after a reload
+    still had them.
+  - After signing out, the cart was empty. Blue added as a guest from quick view.
+  - After signing in again, the cart held both (Red ×3, Blue ×1).
+  - Adding 10 more Red stopped at 10 with a message. Remove worked. The cart looked right at phone
+    size. No console errors.
+- The test carts and the sign-in audit entry from the test were removed afterwards. The chopper's
+  stock didn't change. 8 new tests (153 total); lint, types, formatting and build pass.
+- Committed.
+
+**Next:** Phase 2.3 — checkout form with live totals and the zone/weight delivery charge.
+
+### 2026-11-21 · Phase 2.1 — Locations, delivery zones and charge rules
+
+- New **Admin → Delivery** page (owners and managers: the `zones.manage` permission). The first time
+  anyone opens it, it adds Bangladesh's **8 divisions, 64 districts and 566 areas** (upazilas, plus the
+  city thanas of Dhaka and the areas of Chattogram, Khulna, Rajshahi and Sylhet cities), all in English
+  and Bangla, and three starter zones with the example charges from the SRS:
+  - **Inside Dhaka** — ৳70 for the first kg, +৳15 per extra kg, 1–2 days: the 50 Dhaka city areas.
+  - **Dhaka suburbs** — ৳100, +৳20/kg, 2–3 days: Gazipur, Narayanganj, and Savar, Keraniganj, Dhamrai,
+    Dohar and Nawabganj.
+  - **Outside Dhaka** — ৳130, +৳20/kg, 3–5 days: the other 61 districts.
+- **Zones & charges:** add, edit and delete zones. Each has a charge for the first kg (or another base
+  weight), a charge per extra kg started, a COD fee (% of what is collected at the door, rounded to whole
+  taka), its own free-delivery amount, the advance-payment rule (none / delivery charge / full amount),
+  a usual courier, and delivery days. A zone in use can't be deleted, and the last zone that is on
+  can't be switched off.
+- **Districts & areas:** filter by division or search; set each district's zone; give an area its own
+  zone or let it follow its district; switch off areas you don't deliver to; add and rename areas (the
+  same name twice in one district is refused).
+- **Free delivery & rules:** packaging weight added to every order (100 g), free delivery above a cart
+  value (a zone's own amount wins), free-delivery products (an order of only those ships free), and a
+  flat-rate campaign with optional start and end times (Bangladesh time).
+- **Try it:** pick a district, area, weight, cart value and time and see the charge, why, the COD fee,
+  the total and the delivery days, using the same calculation the checkout (2.3) will use.
+- Every change is in the audit log. The checkout will read the settings from a cache that refreshes
+  when you save.
+- Checked in the browser: the first visit added the data; Dhanmondi → Inside Dhaka ৳70; Savar with
+  2.5 kg → ৳140; Sylhet with a 1% COD fee → ৳130 + ৳16; free above a ৳3,000 store-wide amount; a
+  switched-off area can't be chosen; a duplicate area name is refused. Those test changes were undone
+  and their audit entries removed (the one-time setup entry stays). 14 new tests (145 total); lint,
+  types, formatting and build pass.
+- **You need to:** look through **Districts & areas** for your own delivery reality: which places
+  count as suburbs, any areas your courier doesn't serve, and area names you'd like spelled
+  differently. Set the real charges in **Zones & charges** (the starter ones are the SRS examples).
+- Committed.
+
 ### 2026-11-21 · Phase 1.15 — ISR + on-demand revalidation
 
 - Store pages are built once and kept (product pages fully, category / collection / search pages as a
@@ -311,8 +376,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   one with `openssl rand -hex 24`) so `pnpm catalog:resync` can refresh the store. Before running
   several copies of the store in production, they will need a shared cache (noted for deployment).
 - Committed.
-
-**Next:** Phase 2.1 — locations (division / district / area) and delivery zones with charge rules.
 
 ### 2026-11-21 · Phase 1.14 — WhatsApp / Messenger chat button
 

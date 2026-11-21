@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { cn } from "@/lib/utils";
 import { SLUG_RE } from "@/modules/catalog/logic";
 import type { ProductView } from "@/modules/catalog/storefront";
+import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LabelChips, PriceLine, QuantityStepper, Rating, StockLine, useVariantChoice } from "./buy-parts";
 import { MediaGallery } from "./media-gallery";
 import { VariantOptions } from "./variant-options";
@@ -111,7 +112,7 @@ export function QuickViewHost() {
         ) : !current?.product ? (
           <LoadingBody />
         ) : (
-          <QuickViewBody key={current.product.id} product={current.product} />
+          <QuickViewBody key={current.product.id} product={current.product} onAdded={close} />
         )}
       </DialogContent>
     </Dialog>
@@ -135,8 +136,9 @@ function LoadingBody() {
 
 // ---------- Content ----------
 
-function QuickViewBody({ product }: { product: ProductView }) {
+function QuickViewBody({ product, onAdded }: { product: ProductView; onAdded: () => void }) {
   const c = useVariantChoice(product);
+  const adding = useCartAdding();
   const href = `/p/${product.slug}`;
   const title = product.title.en;
 
@@ -180,19 +182,20 @@ function QuickViewBody({ product }: { product: ProductView }) {
             onChange={c.setQty}
           />
 
-          {/* The cart arrives in Phase 2 (2.2); this button is wired to it then. */}
           <Button
             size="lg"
             className="bg-brand text-brand-foreground hover:bg-brand/90 w-full"
-            disabled
-            aria-describedby="qv-cart-note"
+            disabled={c.available === 0 || !c.variant || adding}
+            onClick={() => {
+              if (!c.variant) return;
+              // The popup closes so the cart drawer can open in its place.
+              const variantId = c.variant.id;
+              void addToCart({ variantId }, c.quantity).then((ok) => ok && onAdded());
+            }}
           >
             <ShoppingBag className="size-4" aria-hidden />
-            {c.available === 0 ? "Sold out" : "Add to cart"}
+            {c.available === 0 ? "Sold out" : adding ? "Adding…" : "Add to cart"}
           </Button>
-          <p id="qv-cart-note" className="text-muted-foreground -mt-1 text-center text-xs">
-            Adding to cart is coming soon.
-          </p>
           <Button asChild variant="outline" size="lg" className="w-full">
             <Link href={href}>
               View full details <ArrowRight className="size-4" aria-hidden />

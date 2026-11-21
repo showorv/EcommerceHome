@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/admin/sign-out-button";
+import { CustomerSignOutButton } from "@/components/auth/customer-sign-out";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSession } from "@/modules/auth/session";
 
@@ -32,7 +32,7 @@ async function AccountDetails() {
       </CardHeader>
       <CardContent className="flex items-center justify-between">
         <p className="text-muted-foreground text-sm">Order history, saved addresses and wishlist are coming soon.</p>
-        <SignOutButton to="/" />
+        <CustomerSignOutButton />
       </CardContent>
     </Card>
   );

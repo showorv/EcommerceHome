@@ -16,6 +16,7 @@ export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: Permission }
   { prefix: "/admin/appearance", permission: "cms.edit" },
   { prefix: "/admin/pages", permission: "cms.edit" },
   { prefix: "/admin/messages", permission: "customers.view" },
+  { prefix: "/admin/delivery", permission: "zones.manage" },
   { prefix: "/admin/staff", permission: "staff.manage" },
   { prefix: "/admin/audit", permission: "audit.view" },
   { prefix: "/admin/system", permission: "system.view" },

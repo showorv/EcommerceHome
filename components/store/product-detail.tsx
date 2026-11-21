@@ -1,10 +1,12 @@
 "use client";
 
 import { ShoppingBag, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ProductView } from "@/modules/catalog/storefront";
+import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LabelChips, PriceLine, QuantityStepper, Rating, StockLine, useVariantChoice } from "./buy-parts";
 import { MediaGallery } from "./media-gallery";
 import { VariantOptions } from "./variant-options";
@@ -38,20 +40,31 @@ export function ProductDetail({ product }: { product: ProductView }) {
     };
   }, []);
 
-  // Both buttons are switched on with the cart and checkout in Phase 2 (2.2, 2.3).
+  const router = useRouter();
+  const adding = useCartAdding();
+  const canBuy = !soldOut && c.variant !== null;
+  const add = (then?: "checkout") => {
+    if (!c.variant) return;
+    const variantId = c.variant.id;
+    void addToCart({ variantId }, c.quantity, { silent: then === "checkout" }).then((ok) => {
+      // "Order now" goes straight on; the checkout page (2.3) takes over from the cart page then.
+      if (ok && then === "checkout") router.push("/cart");
+    });
+  };
+
   const orderButton = (className: string) => (
     <Button
       size="lg"
       className={cn("bg-brand text-brand-foreground hover:bg-brand/90", className)}
-      disabled
-      aria-describedby="pd-cart-note"
+      disabled={!canBuy || adding}
+      onClick={() => add("checkout")}
     >
       <Zap className="size-4" aria-hidden />
       {soldOut ? "Sold out" : "Order now"}
     </Button>
   );
   const cartButton = (className: string) => (
-    <Button size="lg" variant="outline" className={className} disabled aria-describedby="pd-cart-note">
+    <Button size="lg" variant="outline" className={className} disabled={!canBuy || adding} onClick={() => add()}>
       <ShoppingBag className="size-4" aria-hidden />
       Add to cart
     </Button>
@@ -101,9 +114,6 @@ export function ProductDetail({ product }: { product: ProductView }) {
             {orderButton("w-full")}
             {cartButton("w-full")}
           </div>
-          <p id="pd-cart-note" className="text-muted-foreground -mt-2 text-xs">
-            Ordering online is coming soon.
-          </p>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { normalizeBdPhone } from "@/lib/phone";
+import { reloadCart } from "@/components/store/cart/cart-store";
 
 function GoogleButton({ enabled }: { enabled: boolean }) {
   const [pending, start] = useTransition();
@@ -52,6 +53,8 @@ export function CustomerSignInForm({ googleEnabled }: { googleEnabled: boolean }
         );
         return;
       }
+      // A guest cart joins the account's cart now (FR-CO-01).
+      void reloadCart();
       router.replace("/account");
       router.refresh();
     });
