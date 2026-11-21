@@ -17,6 +17,7 @@ const REASONS = {
   flat: "Flat-rate campaign",
   "free-threshold": "Free: the cart is above the free-delivery amount",
   "free-products": "Free: only free-delivery products",
+  coupon: "Free: free-delivery coupon",
 } as const;
 
 /** Uses the same calculation as the checkout, with the saved settings. */

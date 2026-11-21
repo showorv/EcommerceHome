@@ -62,6 +62,8 @@ export function mergeItems(into: CartItem[], from: CartItem[]): CartItem[] {
 /** Current facts about a variant, read on the server. null = gone (deleted). */
 export type VariantFacts = {
   productId: string;
+  /** The product's categories (coupon scope). */
+  categoryIds: string[];
   slug: string;
   title: string;
   variantTitle: string;

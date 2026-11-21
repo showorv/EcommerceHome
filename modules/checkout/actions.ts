@@ -6,7 +6,10 @@ import { normalizeBdPhone } from "@/lib/phone";
 import { rateLimit } from "@/lib/rate-limit";
 import { redis } from "@/lib/redis";
 import { getSession, requestMeta } from "@/modules/auth/session";
+import { loadCart } from "@/modules/cart/data";
 import type { CartView } from "@/modules/cart/logic";
+import type { CouponTerms } from "@/modules/coupons/coupons";
+import { checkCoupon } from "@/modules/coupons/data";
 import { normalizeCode, OTP } from "@/modules/otp/rules";
 import { checkCode, sendCode } from "@/modules/otp/service";
 import type { CheckoutField, CheckoutTotals } from "./checkout";
@@ -41,6 +44,32 @@ export async function submitCheckoutAction(raw: unknown): Promise<CheckoutResult
     };
   } catch (err) {
     logger.error({ err }, "checkout check failed");
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+}
+
+export type CouponResponse =
+  { ok: true; terms: CouponTerms; discount: number; freeDelivery: boolean } | { ok: false; error: string };
+
+/**
+ * "Apply" on the coupon field (FR-CO-04): checks the code against the saved cart and, when the phone is
+ * already typed, the per-customer limit. Rate-limited so codes can't be guessed.
+ */
+export async function checkCouponAction(rawCode: unknown, rawPhone: unknown): Promise<CouponResponse> {
+  try {
+    const { ip } = await requestMeta();
+    const limit = await rateLimit(redis(), `coupon:ip:${ip ?? "unknown"}`, 20, 10 * 60);
+    if (!limit.allowed) return { ok: false, error: "Too many tries. Please wait a few minutes." };
+    if (typeof rawCode !== "string") return { ok: false, error: "Enter a coupon code." };
+    const phone = typeof rawPhone === "string" ? normalizeBdPhone(rawPhone) : null;
+    const [cart, session] = await Promise.all([loadCart([]), getSession()]);
+    const lines = cart.lines.filter((l) => l.problem === null);
+    if (lines.length === 0) return { ok: false, error: "Your cart is empty." };
+    const res = await checkCoupon({ code: rawCode, lines, phone, userId: session?.user.id ?? null, now: Date.now() });
+    if (!res.ok) return res;
+    return { ok: true, terms: res.terms, discount: res.result.discount, freeDelivery: res.result.freeDelivery };
+  } catch (err) {
+    logger.error({ err }, "coupon check failed");
     return { ok: false, error: "Something went wrong. Please try again." };
   }
 }

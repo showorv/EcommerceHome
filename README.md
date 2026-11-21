@@ -110,7 +110,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.3 Checkout form with live totals and zone/weight delivery charge (FR-CO-02, SRS §2.2–2.3)
 - [x] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
 - [x] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
-- [ ] 2.6 Coupons (FR-CO-04)
+- [x] 2.6 Coupons (FR-CO-04)
 - [ ] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
 - [ ] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
 - [ ] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
@@ -302,6 +302,47 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-21 · Phase 2.6 — Coupons
+
+- New **Admin → Coupons** page (`coupons.manage`). Each coupon has:
+  - a **code** (3–30 letters, digits, - or _; saved in upper case; a button makes a random one)
+  - a **type**: percent off (with an optional most it can take off), an amount off, or free delivery
+  - a **minimum order**, **total uses** and **uses per customer** (by phone number or account)
+  - **start and end** in Bangladesh time
+  - **applies to** the whole store, or chosen categories (their sub-categories too) and products
+  - a staff note and an on/off switch
+- The list shows each coupon's status (Active, Off, Scheduled, Expired, Used up) and what it gives.
+  A duplicate code is refused. A coupon already on orders can't be deleted or have its code changed;
+  switch it off instead. Every change is in the audit log.
+- **Checkout:** "Have a coupon code?" opens a field (Enter applies it). The applied coupon shows as a
+  chip with a remove button, and the summary gets a "Coupon discount" row, or "Free delivery with your
+  coupon" on the delivery line.
+- **Rules:**
+  - Percent discounts are rounded to whole taka, then capped.
+  - An amount off never goes above the products it covers.
+  - The minimum order counts the whole cart, before the discount.
+  - Free delivery makes the delivery charge ৳0; a COD fee, if any, stays.
+  - Unknown and switched-off codes get the same answer ("We couldn't find this code."), so codes
+    can't be guessed by their message.
+  - The page works the discount out live as the cart changes. The server checks the code again when the
+    order is sent. If it stopped working (switched off, used up, expired), the page takes it off, shows
+    why and shows the new total before anything is ordered.
+  - Coupon checks are rate-limited (20 per 10 minutes per IP).
+- The usage counts and per-customer limit read orders, which arrive in 2.7. 2.7 also counts a use when
+  an order is saved.
+- Checked in the browser:
+  - TEST10 (10% off, up to ৳100, from ৳1,000) on the ৳1,450 chopper gave −৳100 and ৳1,420 to Dhanmondi.
+  - A duplicate code was refused, and an unknown code gave its message.
+  - A free-delivery code made Inside Dhaka delivery free ("you save ৳70").
+  - Switching a code off after it was applied, then placing the order, took the coupon off with the
+    reason and showed ৳1,520.
+  - Phone size works for checkout and the admin form.
+- The 2 test coupons, their 2 audit entries, the test cart, browser draft and rate-limit keys were
+  removed. 17 new tests (205 total); lint, types and formatting pass.
+- Committed.
+
+**Next:** Phase 2.7 — order placement.
+
 ### 2026-11-21 · Phase 2.5 — bKash / Nagad advance payments
 
 - New **Admin → Payments** page (Owner only, `settings.manage`): one card each for **bKash** and
@@ -339,8 +380,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   Payments, and upload its QR from the bKash/Nagad app. The SRS's optional small discount for paying
   everything in advance isn't in; say if you want it.
 - Committed.
-
-**Next:** Phase 2.6 — coupons.
 
 ### 2026-11-21 · Phase 2.4 — SMS provider and phone code at checkout
 

@@ -26,9 +26,11 @@ import {
   type CheckoutTotals,
   type PaymentMethod,
 } from "@/modules/checkout/checkout";
+import { applyCoupon, type CouponTerms } from "@/modules/coupons/coupons";
 import type { DeliveryData } from "@/modules/delivery/data";
 import { WALLET_NAMES, type Wallet, type WalletType } from "@/modules/payments/payments";
 import { AdvancePayment } from "./advance-payment";
+import { CouponBox } from "./coupon-box";
 import { PhoneCodeDialog, type CodeSent } from "./phone-code-dialog";
 
 /**
@@ -103,6 +105,9 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
+  // The applied coupon's terms (not kept in the draft: it is checked again on every visit).
+  const [coupon, setCoupon] = useState<CouponTerms | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [codeStep, setCodeStep] = useState<{ phone: string; sent: CodeSent; sentAt: number } | null>(null);
   const now = useMinuteClock();
 
@@ -150,8 +155,21 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
   const payWallet =
     form.payWallet && wallets.some((w) => w.type === form.payWallet) ? form.payWallet : (wallets[0]?.type ?? "");
   const lines = cart.lines.filter((l) => l.problem === null);
+  // Worked out live, so a cart that drops below the minimum or a code that expires shows at once.
+  const applied = coupon && now ? applyCoupon(coupon, lines, now) : null;
+  const discount = applied?.ok ? applied.discount : 0;
   const totals =
-    zone && lines.length > 0 ? checkoutTotals({ zone, rules: config.rules, lines, paymentMethod: method, now }) : null;
+    zone && lines.length > 0
+      ? checkoutTotals({
+          zone,
+          rules: config.rules,
+          lines,
+          discount,
+          freeDelivery: applied?.ok ? applied.freeDelivery : false,
+          paymentMethod: method,
+          now,
+        })
+      : null;
 
   function set<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -160,7 +178,7 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
   }
 
   function submit() {
-    const data = { ...form, paymentMethod: method, payWallet };
+    const data = { ...form, paymentMethod: method, payWallet, couponCode: coupon && applied?.ok ? coupon.code : "" };
     const local = checkoutInput.safeParse(data);
     if (!local.success) {
       const fe = fieldErrors(local.error);
@@ -194,6 +212,14 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
           sent: sent.ok ? { ok: true, resendIn: sent.resendIn } : sent,
           sentAt: Math.floor(Date.now() / 1000),
         });
+        return;
+      }
+      if (!res.ok && res.fields?.couponCode) {
+        // The code stopped working since it was applied (switched off, used up…): take it off so the
+        // summary shows the real total, and say why. The box opens again with the reason under it.
+        setCoupon(null);
+        setCouponError(res.fields.couponCode);
+        setNotice({ kind: "error", text: "We took the coupon off. Check the new total, then place the order again." });
         return;
       }
       if (!res.ok) {
@@ -455,7 +481,31 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
         </div>
       </div>
 
-      <Summary cart={cart} totals={totals} zoneName={zone?.name ?? null} walletLabel={walletLabel}>
+      <Summary
+        cart={cart}
+        totals={totals}
+        discount={discount}
+        zoneName={zone?.name ?? null}
+        walletLabel={walletLabel}
+        couponSlot={
+          <CouponBox
+            coupon={coupon}
+            phone={form.phone}
+            problem={couponError ?? (applied && !applied.ok ? applied.error : null)}
+            onApply={(terms) => {
+              setCoupon(terms);
+              setCouponError(null);
+              setNotice(null);
+            }}
+            onRemove={() => {
+              setCoupon(null);
+              setCouponError(null);
+              setNotice(null);
+            }}
+            onEdit={() => setCouponError(null)}
+          />
+        }
+      >
         {notice && (
           <p
             role={notice.kind === "error" ? "alert" : "status"}
@@ -517,6 +567,7 @@ function focusFirst(fields: Partial<Record<CheckoutField, string>>) {
     "payWallet",
     "senderNumber",
     "trxId",
+    "couponCode",
     "acceptTerms",
   ];
   const first = order.find((k) => fields[k]);
@@ -575,14 +626,19 @@ function FieldError({ id, text }: { id: CheckoutField; text: string }) {
 function Summary({
   cart,
   totals,
+  discount,
   zoneName,
   walletLabel,
+  couponSlot,
   children,
 }: {
   cart: ReturnType<typeof useCart>["cart"];
   totals: CheckoutTotals | null;
+  /** The coupon's discount, shown even before an area is chosen. */
+  discount: number;
   zoneName: string | null;
   walletLabel: string;
+  couponSlot: ReactNode;
   children: ReactNode;
 }) {
   const subtotal = totals?.subtotal ?? cart.subtotal;
@@ -611,9 +667,10 @@ function Summary({
           </li>
         ))}
       </ul>
+      <div className="border-t pt-3">{couponSlot}</div>
       <dl className="grid gap-2 border-t pt-3 text-sm">
         <Row label="Subtotal" value={formatTaka(subtotal)} />
-        {totals && totals.discount > 0 && <Row label="Discount" value={`−${formatTaka(totals.discount)}`} />}
+        {discount > 0 && <Row label="Coupon discount" value={`−${formatTaka(totals?.discount ?? discount)}`} />}
         <Row
           label={zoneName ? `Delivery (${zoneName})` : "Delivery"}
           value={!d ? "Choose your area" : d.charge === 0 ? "Free" : formatTaka(d.charge)}
@@ -621,8 +678,12 @@ function Summary({
         />
         {d && d.charge !== d.regularCharge && (
           <p className="text-success -mt-1 text-xs">
-            {d.reason === "flat" ? "Campaign price" : "Free delivery"}: you save{" "}
-            {formatTaka(d.regularCharge - d.charge)}.
+            {d.reason === "flat"
+              ? "Campaign price"
+              : d.reason === "coupon"
+                ? "Free delivery with your coupon"
+                : "Free delivery"}
+            : you save {formatTaka(d.regularCharge - d.charge)}.
           </p>
         )}
         {d && d.reason === "weight" && d.freeAbove !== null && subtotal < d.freeAbove && (
@@ -633,7 +694,7 @@ function Summary({
         {totals && totals.codFee > 0 && <Row label="Cash-on-delivery fee" value={formatTaka(totals.codFee)} />}
         <div className="flex items-baseline justify-between border-t pt-2">
           <dt className="font-semibold">Total</dt>
-          <dd className="text-lg font-bold tabular-nums">{formatTaka(totals?.total ?? subtotal)}</dd>
+          <dd className="text-lg font-bold tabular-nums">{formatTaka(totals?.total ?? subtotal - discount)}</dd>
         </div>
         {totals && (
           <>

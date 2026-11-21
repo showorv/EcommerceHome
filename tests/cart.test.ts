@@ -83,6 +83,7 @@ describe("cart items", () => {
 
 const facts = (patch: Partial<VariantFacts> = {}): VariantFacts => ({
   productId: id(100),
+  categoryIds: [],
   slug: "mini-fan",
   title: "Mini fan",
   variantTitle: "",

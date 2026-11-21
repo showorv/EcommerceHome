@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: "/admin/storefront", label: "Storefront" },
   { href: "/admin/appearance", label: "Menus & theme" },
   { href: "/admin/pages", label: "Pages" },
+  { href: "/admin/coupons", label: "Coupons" },
   { href: "/admin/delivery", label: "Delivery" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/messages", label: "Messages" },

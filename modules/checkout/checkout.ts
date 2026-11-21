@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeBdPhone } from "@/lib/phone";
+import { normalizeCouponCode } from "@/modules/coupons/coupons";
 import { normalizeTrxId, WALLET_NAMES, WALLET_TYPES, type WalletType } from "@/modules/payments/payments";
 import type { CartLine } from "@/modules/cart/logic";
 import {
@@ -99,11 +100,21 @@ const checkoutFields = z.object({
     .max(30)
     .default("")
     .transform((v) => normalizeTrxId(v) ?? v),
+  /** Optional (FR-CO-04). Checked on the server against the saved coupon. */
+  couponCode: z
+    .string()
+    .trim()
+    .max(40)
+    .default("")
+    .transform((v) => (v ? (normalizeCouponCode(v) ?? v) : "")),
   acceptTerms: z.literal(true, { error: "Please accept the terms and return policy" }),
 });
 
 export const checkoutInput = checkoutFields
   .superRefine((v, ctx) => {
+    if (v.couponCode && !normalizeCouponCode(v.couponCode)) {
+      ctx.addIssue({ code: "custom", path: ["couponCode"], message: "Check the code: letters, digits, - or _." });
+    }
     if (!needsAdvance(v.paymentMethod)) return;
     const wallet = v.payWallet ? WALLET_NAMES[v.payWallet] : "wallet";
     if (!v.payWallet) ctx.addIssue({ code: "custom", path: ["payWallet"], message: "Choose bKash or Nagad" });
@@ -168,6 +179,8 @@ export function checkoutTotals(input: {
   rules: DeliveryRules;
   lines: Pick<CartLine, "productId" | "weightGrams" | "qty" | "price">[];
   discount?: number;
+  /** A free-delivery coupon is applied. */
+  freeDelivery?: boolean;
   paymentMethod: PaymentMethod;
   now: number;
 }): CheckoutTotals {
@@ -175,7 +188,9 @@ export function checkoutTotals(input: {
   const subtotal = lines.reduce((n, l) => n + l.price * l.qty, 0);
   const discount = Math.min(subtotal, Math.max(0, input.discount ?? 0));
   const goods = subtotal - discount;
-  const delivery = deliveryQuote({ zone, rules, lines, subtotal: goods, now });
+  const quote = deliveryQuote({ zone, rules, lines, subtotal: goods, now });
+  const delivery: DeliveryQuote =
+    input.freeDelivery && quote.charge > 0 ? { ...quote, charge: 0, reason: "coupon" } : quote;
   const advanceDue =
     paymentMethod === "full" ? goods + delivery.charge : paymentMethod === "cod_advance" ? delivery.charge : 0;
   const atDoor = goods + delivery.charge - advanceDue;

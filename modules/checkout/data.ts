@@ -2,6 +2,8 @@ import "server-only";
 import { getSession } from "@/modules/auth/session";
 import { loadCart } from "@/modules/cart/data";
 import type { CartView } from "@/modules/cart/logic";
+import { checkCoupon } from "@/modules/coupons/data";
+import type { CouponTerms } from "@/modules/coupons/coupons";
 import { getDeliveryConfig } from "@/modules/delivery/data";
 import { getPaymentConfig, isTrxIdUsed } from "@/modules/payments/data";
 import { WALLET_NAMES } from "@/modules/payments/payments";
@@ -26,7 +28,15 @@ import { isCheckoutPhoneVerified } from "./phone";
  */
 
 export type CheckoutCheck =
-  | { ok: true; input: CheckoutInput; cart: CartView; totals: CheckoutTotals; zoneName: string }
+  | {
+      ok: true;
+      input: CheckoutInput;
+      cart: CartView;
+      totals: CheckoutTotals;
+      zoneName: string;
+      /** The coupon used, as checked now (null without one). */
+      coupon: CouponTerms | null;
+    }
   | {
       ok: false;
       error: string;
@@ -99,17 +109,37 @@ export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
     }
   }
 
+  const now = Date.now();
+  let coupon: CouponTerms | null = null;
+  let discount = 0;
+  let freeDelivery = false;
+  if (input.couponCode) {
+    const c = await checkCoupon({
+      code: input.couponCode,
+      lines: cart.lines,
+      phone: input.phone,
+      userId: session?.user.id ?? null,
+      now,
+    });
+    if (!c.ok) return { ok: false, error: "Please check the highlighted fields.", fields: { couponCode: c.error } };
+    coupon = c.terms;
+    discount = c.result.discount;
+    freeDelivery = c.result.freeDelivery;
+  }
+
   const totals = checkoutTotals({
     zone,
     rules: config.rules,
     lines: cart.lines,
+    discount,
+    freeDelivery,
     paymentMethod: input.paymentMethod,
-    now: Date.now(),
+    now,
   });
 
   // Last, so a code is only sent once the rest of the order is right.
   if (!(await isCheckoutPhoneVerified(input.phone, session))) {
     return { ok: false, error: "Please confirm your mobile number with the code we text you.", needsCode: true };
   }
-  return { ok: true, input, cart, totals, zoneName: zone.name };
+  return { ok: true, input, cart, totals, zoneName: zone.name, coupon };
 }

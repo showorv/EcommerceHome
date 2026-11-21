@@ -143,7 +143,7 @@ export type DeliveryQuote = {
   /** Items plus packaging. */
   weightGrams: number;
   /** Why the charge is what it is. */
-  reason: "weight" | "flat" | "free-threshold" | "free-products";
+  reason: "weight" | "flat" | "free-threshold" | "free-products" | "coupon";
   /** The weight-based price before any free / flat rule (for "you saved ৳…"). */
   regularCharge: Poisha;
   /** Cart value at which delivery becomes free here, or null when there's no such rule. */

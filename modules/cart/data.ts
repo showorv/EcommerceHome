@@ -145,7 +145,7 @@ export async function variantFacts(variantIds: string[]): Promise<Map<string, Va
     .lean<AnyDoc[]>();
   const productIds = [...new Set(variants.map((v) => String(v.productId)))];
   const products = await Product.find(trustFilter({ _id: { $in: productIds } }), null, { withDeleted: true })
-    .select("title slug status media deletedAt")
+    .select("title slug status media categoryIds deletedAt")
     .lean<AnyDoc[]>();
   const byId = new Map(products.map((p) => [String(p._id), p]));
   for (const v of variants) {
@@ -153,6 +153,7 @@ export async function variantFacts(variantIds: string[]): Promise<Map<string, Va
     if (!p) continue;
     facts.set(String(v._id), {
       productId: String(p._id),
+      categoryIds: ((p.categoryIds ?? []) as unknown[]).map(String),
       slug: String(p.slug),
       title: String(p.title?.en ?? ""),
       variantTitle: String(v.title ?? ""),
