@@ -33,7 +33,10 @@ export type CheckoutCheck =
       input: CheckoutInput;
       cart: CartView;
       totals: CheckoutTotals;
-      zoneName: string;
+      zone: { id: string; name: string };
+      /** District and area names for the order's address. */
+      district: string;
+      area: string;
       /** The coupon used, as checked now (null without one). */
       coupon: CouponTerms | null;
     }
@@ -141,5 +144,15 @@ export async function checkCheckout(raw: unknown): Promise<CheckoutCheck> {
   if (!(await isCheckoutPhoneVerified(input.phone, session))) {
     return { ok: false, error: "Please confirm your mobile number with the code we text you.", needsCode: true };
   }
-  return { ok: true, input, cart, totals, zoneName: zone.name, coupon };
+  const district = config.districts.find((d) => d.id === input.districtId)?.name.en ?? "";
+  return {
+    ok: true,
+    input,
+    cart,
+    totals,
+    zone: { id: zone.id, name: zone.name },
+    district,
+    area: area.name.en,
+    coupon,
+  };
 }

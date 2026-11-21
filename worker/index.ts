@@ -2,15 +2,18 @@ import "./load-env";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
+import { getQueue, QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
 import { bullConnection } from "@/lib/redis";
+import { productTags, scopeOfProducts } from "@/modules/catalog/product-tags";
 import { sendEmail } from "@/modules/notifications/email";
 import { smsProvider, SmsSendError } from "@/modules/notifications/sms";
+import { releaseExpiredReservations } from "@/modules/orders/reservations";
+import { revalidateStore } from "./revalidate";
 
 /**
  * Background worker (SRS §6.1). Run with `pnpm worker`.
- * Phase 0: notifications (SMS + email). Later phases add PDF invoices, courier booking,
- * image processing and scheduled tasks as more queues.
+ * Queues: notifications (SMS + email) and orders (scheduled: stock held by orders not confirmed in
+ * time goes back on sale, FR-CO-07). Later phases add PDF invoices, courier booking and image work.
  */
 env(); // fail fast on bad configuration
 
@@ -29,12 +32,35 @@ async function handleNotification(job: Job<NotificationJob>) {
   return { provider: "smtp", ...res };
 }
 
+const RELEASE_JOB = "release-reservations";
+
+async function handleOrders(job: Job) {
+  if (job.name !== RELEASE_JOB) throw new UnrecoverableError(`Unknown orders job: ${job.name}`);
+  const res = await releaseExpiredReservations();
+  if (res.orderNos.length > 0) {
+    logger.info({ orders: res.orderNos }, "stock released from orders not confirmed in time");
+    // Products back in stock: their store pages are rebuilt.
+    await revalidateStore(await productTags(await scopeOfProducts(res.productIds)));
+  }
+  return { released: res.orderNos.length };
+}
+
 const workers = [
   new Worker<NotificationJob>(QUEUE_NAMES.notifications, handleNotification, {
     connection: bullConnection(),
     concurrency: 10,
   }),
+  new Worker(QUEUE_NAMES.orders, handleOrders, { connection: bullConnection(), concurrency: 1 }),
 ];
+
+// Every 5 minutes. Upserting keeps one schedule however often the worker restarts.
+getQueue(QUEUE_NAMES.orders)
+  .upsertJobScheduler(
+    RELEASE_JOB,
+    { every: 5 * 60_000 },
+    { name: RELEASE_JOB, opts: { attempts: 1, removeOnComplete: { count: 50 }, removeOnFail: { count: 50 } } },
+  )
+  .catch((err: unknown) => logger.error({ err }, "could not schedule the stock release job"));
 
 for (const w of workers) {
   w.on("completed", (job) => logger.info({ queue: w.name, jobId: job.id, kind: job.name }, "job completed"));

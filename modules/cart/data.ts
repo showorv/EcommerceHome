@@ -272,3 +272,10 @@ export async function cartOwnerKey(ip: string | null): Promise<string> {
   const w = await who();
   return w.userId ? `user:${w.userId}` : w.tokenHash ? `guest:${w.tokenHash.slice(0, 16)}` : `ip:${ip ?? "unknown"}`;
 }
+
+/** This browser's cart id, if it has one (order placement removes the ordered lines from it). */
+export async function currentCartId(): Promise<string | null> {
+  await connectMongoose();
+  const cart = await currentCart(await who(), false);
+  return cart ? String(cart.id) : null;
+}

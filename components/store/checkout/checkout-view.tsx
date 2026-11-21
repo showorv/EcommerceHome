@@ -4,7 +4,7 @@ import { CheckCircle2, ImageOff, Lock, ShoppingBag } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { reloadCart, useCart } from "@/components/store/cart/cart-store";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -108,6 +108,8 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
   // The applied coupon's terms (not kept in the draft: it is checked again on every visit).
   const [coupon, setCoupon] = useState<CouponTerms | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<string | null>(null);
+  const orderKey = useRef<string | null>(null);
   const [codeStep, setCodeStep] = useState<{ phone: string; sent: CodeSent; sentAt: number } | null>(null);
   const now = useMinuteClock();
 
@@ -187,8 +189,11 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
       focusFirst(fe);
       return;
     }
+    // One key per order: a double click or a retry after a lost reply gives back the same order.
+    orderKey.current ??= crypto.randomUUID();
+    const key = orderKey.current;
     start(async () => {
-      const res = await submitCheckoutAction(data).catch(() => null);
+      const res = await submitCheckoutAction(data, { key, expectedTotal: totals?.total }).catch(() => null);
       if (!res) {
         setNotice({ kind: "error", text: "Couldn't reach the store. Check your connection and try again." });
         return;
@@ -226,21 +231,25 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
         setErrors(res.fields ?? {});
         setNotice({ kind: "error", text: res.error });
         if (res.fields) focusFirst(res.fields);
+        // A price, stock or delivery setting changed since the page loaded: show the new numbers.
+        if (res.cart || res.totals) void reloadCart();
         return;
       }
-      setErrors({});
-      if (totals && res.totals.total !== totals.total) {
-        // A price, stock or delivery setting changed since the page loaded: show the new numbers first.
-        void reloadCart();
-        router.refresh();
-        setNotice({
-          kind: "error",
-          text: `The total changed to ${formatTaka(res.totals.total)}. Please check your order and try again.`,
-        });
-        return;
-      }
-      setNotice({ kind: "ok", text: res.message });
+      setPlaced(res.orderNo);
+      router.replace("/checkout/thank-you");
+      // The ordered lines are out of the cart now: the badge and drawer follow.
+      void reloadCart();
     });
+  }
+
+  if (placed) {
+    return (
+      <div className="grid place-items-center gap-3 rounded-lg border px-4 py-16 text-center" role="status">
+        <CheckCircle2 className="text-success size-10" aria-hidden />
+        <p className="text-lg font-semibold">Order {placed} placed</p>
+        <p className="text-muted-foreground text-sm">Opening your order…</p>
+      </div>
+    );
   }
 
   if (!synced && cart.lines.length === 0) {

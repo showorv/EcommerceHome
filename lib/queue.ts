@@ -6,7 +6,7 @@ import { bullConnection } from "@/lib/redis";
  * (worker/index.ts) does the slow work. Jobs retry with exponential back-off, and failed
  * jobs are kept (the "dead-letter list") so staff can see and retry them in admin.
  */
-export const QUEUE_NAMES = { notifications: "notifications" } as const;
+export const QUEUE_NAMES = { notifications: "notifications", orders: "orders" } as const;
 
 export type NotificationJob =
   | { kind: "sms"; to: string; text: string; purpose: string }

@@ -1,50 +1,105 @@
 "use server";
 
 import { env } from "@/lib/env";
+import { formatTaka } from "@/lib/money";
 import { logger } from "@/lib/logger";
 import { normalizeBdPhone } from "@/lib/phone";
 import { rateLimit } from "@/lib/rate-limit";
 import { redis } from "@/lib/redis";
 import { getSession, requestMeta } from "@/modules/auth/session";
-import { loadCart } from "@/modules/cart/data";
+import { cartOwnerKey, currentCartId, loadCart } from "@/modules/cart/data";
 import type { CartView } from "@/modules/cart/logic";
 import type { CouponTerms } from "@/modules/coupons/coupons";
 import { checkCoupon } from "@/modules/coupons/data";
 import { normalizeCode, OTP } from "@/modules/otp/rules";
 import { checkCode, sendCode } from "@/modules/otp/service";
+import { productTags, refreshTags, scopeOfProducts } from "@/modules/catalog/store-refresh";
+import { rememberReceipt } from "@/modules/orders/data";
+import { normalizeOrderKey } from "@/modules/orders/orders";
+import { findPlacedOrder, placeOrder } from "@/modules/orders/place";
 import type { CheckoutField, CheckoutTotals } from "./checkout";
 import { checkCheckout } from "./data";
 import { CHECKOUT_OTP_PURPOSE, isCheckoutPhoneVerified, rememberVerifiedPhone } from "./phone";
 
 export type CheckoutResult =
-  | { ok: true; totals: CheckoutTotals; message: string }
+  | { ok: true; orderNo: string }
   | {
       ok: false;
       error: string;
       fields?: Partial<Record<CheckoutField, string>>;
       cart?: CartView;
       needsCode?: true;
+      /** The server's amounts, when they differ from what the page showed. */
+      totals?: CheckoutTotals;
     };
 
 /**
- * Sends the checkout form. For now it checks everything on the server (including the phone code) and
- * answers with the amounts it worked out; payment details (2.5) and saving the order (2.7) build on this.
+ * Places the order (FR-CO-05…07). The server checks and prices everything again, then saves the order
+ * with its stock held. `key` is the page's key for this attempt, so a double click or a retry gives back
+ * the same order; `expectedTotal` is the total the shopper saw, and nothing is ordered if it changed.
  */
-export async function submitCheckoutAction(raw: unknown): Promise<CheckoutResult> {
+export async function submitCheckoutAction(
+  raw: unknown,
+  meta: { key?: unknown; expectedTotal?: unknown } = {},
+): Promise<CheckoutResult> {
   try {
-    const { ip } = await requestMeta();
+    const { ip, userAgent } = await requestMeta();
     const limit = await rateLimit(redis(), `checkout:ip:${ip ?? "unknown"}`, 30, 60);
     if (!limit.allowed) return { ok: false, error: "Too many tries. Please wait a minute." };
+    const key = normalizeOrderKey(meta.key);
+    if (!key) return { ok: false, error: "Please reload the page and try again." };
+
+    const owner = await cartOwnerKey(ip);
+    // Sent twice (double click, or a retry after a lost reply): the first one's order, not a second.
+    const done = await findPlacedOrder(owner, key);
+    if (done) {
+      await rememberReceipt(done.id);
+      return { ok: true, orderNo: done.orderNo };
+    }
+
     const res = await checkCheckout(raw);
     if (!res.ok) return res;
-    return {
-      ok: true,
-      totals: res.totals,
-      message: "Everything checks out. Placing orders online switches on very soon.",
-    };
+    if (typeof meta.expectedTotal === "number" && meta.expectedTotal !== res.totals.total) {
+      return {
+        ok: false,
+        error: `The total changed to ${formatTaka(res.totals.total)}. Please check your order and place it again.`,
+        totals: res.totals,
+        cart: res.cart,
+      };
+    }
+
+    const session = await getSession();
+    const placed = await placeOrder({
+      check: res,
+      key,
+      owner,
+      cartId: await currentCartId(),
+      userId: session?.user.id ?? null,
+      ip,
+      userAgent,
+    });
+    if (!placed.ok) {
+      return {
+        ok: false,
+        error: placed.field ? "Please check the highlighted fields." : placed.error,
+        fields:
+          placed.field === "trxId"
+            ? { trxId: "This TrxID is already on another order. Check the ID in your payment SMS." }
+            : placed.field === "couponCode"
+              ? { couponCode: placed.error }
+              : undefined,
+        cart: placed.cartChanged ? await loadCart([]) : undefined,
+      };
+    }
+    await rememberReceipt(placed.order.id);
+    if (placed.lowStockProductIds.length > 0) {
+      // "Only N left" / "Sold out" changed on these product pages.
+      refreshTags(await productTags(await scopeOfProducts(placed.lowStockProductIds)));
+    }
+    return { ok: true, orderNo: placed.order.orderNo };
   } catch (err) {
-    logger.error({ err }, "checkout check failed");
-    return { ok: false, error: "Something went wrong. Please try again." };
+    logger.error({ err }, "order placement failed");
+    return { ok: false, error: "Something went wrong and your order wasn't placed. Please try again." };
   }
 }
 

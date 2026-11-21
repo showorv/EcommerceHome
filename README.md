@@ -111,7 +111,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.4 SMS adapter (BTRC-listed provider) + phone OTP with limits (FR-CO-03, SRS §2.4)
 - [x] 2.5 Payment options: COD, COD + delivery advance, full advance with sender number + unique TrxID; wallet numbers + QR from settings
 - [x] 2.6 Coupons (FR-CO-04)
-- [ ] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
+- [x] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
 - [ ] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
 - [ ] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
 - [ ] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
@@ -302,6 +302,71 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-21 · Phase 2.7 — Order placement
+
+- **"Place order" now saves the order.** The server checks and prices everything again (FR-CO-05).
+  Then one MongoDB transaction does all of this, or none of it:
+  - holds the stock, only if enough is left (stock − held ≥ quantity), so two shoppers can't buy the
+    last unit (NFR-SC-07)
+  - counts the coupon use, and stops if the coupon's total limit was just reached
+  - takes the next **order number** (SR10001, SR10002…). It is taken inside the transaction, so a
+    failed order gives its number back and the numbers have no gaps.
+  - saves the order and takes the ordered lines out of the cart
+  - updates the product's stock shown in listings
+- **No double orders (FR-CO-06):** the checkout page sends a key with each order. A double click, or
+  a retry after a lost reply, gives back the same order. The key is tied to the browser's cart or account.
+- **The total you saw is the total you pay:** if a price, stock or delivery setting changed while the
+  page was open, nothing is ordered. The page shows the new total and asks again.
+- **What's saved** (SRS §7):
+  - the customer, the address with district and area names, and the zone
+  - each item as a snapshot (title, variant, SKU, price and landed cost), so later product edits never
+    change an order or the profit reports
+  - subtotal, coupon discount, delivery charge, COD fee, total, the amount due at the door, and the
+    bKash/Nagad advance with sender number and TrxID
+  - status Pending, payment status Unpaid (or "Advance to check"), and the status history
+- A TrxID can't be on two orders: the database refuses it too.
+- One phone number can place 5 orders an hour (NFR-SEC-05).
+- **Thank-you page** (`/checkout/thank-you`, SRS §2.5): the order number, what happens next ("We'll
+  call 01712…"), the items and amounts, the advance with only the last 4 of the TrxID, and the address.
+  Only the browser that placed the order sees it, for 6 hours (a signed cookie). Anyone else gets "No
+  recent order on this device".
+- **SMS** "China Import Store: Order #SR10023 received. We will call you to confirm." goes out through
+  the queue. A failed send never undoes the order.
+- **Stock holds end (FR-CO-07):** a pending order holds its stock for 24 hours by default. The worker
+  checks every 5 minutes and puts stock from older pending orders back on sale. The order stays Pending
+  with a note in its history, and staff can still confirm it (confirming holds stock again, 2.10). Then
+  it asks the store to rebuild the product pages.
+- After an order, a product page is rebuilt only when a variant drops to its low-stock level or sells out
+  ("Only 3 left" / "Sold out"). Other orders don't touch the cached pages.
+- Checked:
+  - **Script against the local database:**
+    - two orders at the same moment for the last unit: one placed, one "just sold out"
+    - the same order sent twice at once: one order
+    - a coupon with one use left: the second order was refused
+    - a reused TrxID was refused
+    - the 6th order from one phone in an hour was refused
+    - expired holds gave back all 9 held units exactly once
+    - numbers had no gaps after failed orders
+  - **In the browser:**
+    - double-clicked "Place order" on the chopper, then entered the phone code: one order, SR10023
+    - 1 unit held, the cart emptied, the thank-you page shown and the SMS sent
+    - the page works at phone size
+- **Cleanup:**
+  - the test orders, the test product, the coupon and the SMS jobs were removed
+  - the orders collection and the order-number counter were removed, so your first real order is SR10001
+  - the chopper's stock, held count and listing fields were put back as they were. Only its Red
+    variant's "last updated" time now shows today.
+- 11 new tests (216 total); lint, types, formatting and the production build pass.
+- **For you:**
+  - **Restart the worker** (`pnpm worker`) so it picks up the new orders queue and the 5-minute check.
+  - Set `REVALIDATE_SECRET` in `.env.local` (32+ characters) so the worker can rebuild product pages
+    after it puts stock back on sale.
+  - The hold time (24 h) gets its admin setting with the orders page in 2.9.
+  - Orders are in the database but there's no admin screen for them yet: that's 2.9.
+- Committed.
+
+**Next:** Phase 2.8 — risk score, blocked contacts and rules that require an advance.
+
 ### 2026-11-21 · Phase 2.6 — Coupons
 
 - New **Admin → Coupons** page (`coupons.manage`). Each coupon has:
@@ -340,8 +405,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - The 2 test coupons, their 2 audit entries, the test cart, browser draft and rate-limit keys were
   removed. 17 new tests (205 total); lint, types and formatting pass.
 - Committed.
-
-**Next:** Phase 2.7 — order placement.
 
 ### 2026-11-21 · Phase 2.5 — bKash / Nagad advance payments
 
