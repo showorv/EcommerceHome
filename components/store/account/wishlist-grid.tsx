@@ -20,5 +20,5 @@ export function WishlistGrid({ products }: { products: CardProduct[] }) {
       </div>
     );
   }
-  return <ProductGrid products={shown} className="lg:grid-cols-3" />;
+  return <ProductGrid products={shown} wishlist className="xl:grid-cols-3" />;
 }

@@ -3,6 +3,7 @@ import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { getQueue, ORDER_JOBS, QUEUE_NAMES, type MetaEventJob, type NotificationJob } from "@/lib/queue";
+import * as Sentry from "@sentry/node";
 import { bullConnection } from "@/lib/redis";
 import { MetaSendError, sendMetaEvent } from "@/modules/analytics/capi";
 import { productTags, scopeOfProducts } from "@/modules/catalog/product-tags";
@@ -12,6 +13,7 @@ import { emailProvider, EmailSendError, errorText, type EmailAttachment } from "
 import { renderEmailHtml } from "@/modules/notifications/email-layout";
 import { markSent, markTryFailed } from "@/modules/notifications/log";
 import { smsProvider, SmsSendError } from "@/modules/notifications/sms";
+import { SENTRY_COMMON, scrubEvent } from "@/modules/monitoring/scrub";
 import { releaseExpiredReservations } from "@/modules/orders/reservations";
 import { revalidateStore } from "./revalidate";
 
@@ -22,6 +24,11 @@ import { revalidateStore } from "./revalidate";
  * image work.
  */
 env(); // fail fast on bad configuration
+
+// Error tracking (NFR-AV-03): only with SENTRY_DSN, and without personal data.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, ...SENTRY_COMMON, beforeSend: (event) => scrubEvent(event) });
+}
 
 type EmailJob = Extract<NotificationJob, { kind: "email" }>;
 
@@ -104,12 +111,17 @@ getQueue(QUEUE_NAMES.orders)
 
 for (const w of workers) {
   w.on("completed", (job) => logger.info({ queue: w.name, jobId: job.id, kind: job.name }, "job completed"));
-  w.on("failed", (job, err) =>
+  w.on("failed", (job, err) => {
     logger.warn(
       { queue: w.name, jobId: job?.id, kind: job?.name, attempt: job?.attemptsMade, err: err.message },
       "job failed",
-    ),
-  );
+    );
+    // Reported once a job has used up its tries (earlier tries are retried on their own).
+    const final = !job || job.attemptsMade >= (job.opts.attempts ?? 1) || err.name === "UnrecoverableError";
+    if (final && process.env.SENTRY_DSN) {
+      Sentry.captureException(err, { tags: { queue: w.name, job: job?.name ?? "unknown" } });
+    }
+  });
 }
 
 logger.info({ queues: workers.map((w) => w.name) }, "worker started");

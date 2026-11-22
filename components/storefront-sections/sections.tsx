@@ -79,7 +79,7 @@ function SectionView({ section: s, first }: { section: Section; first: boolean }
 // ---------- Shared bits ----------
 
 const Wrap = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <section className={cn("mx-auto max-w-6xl px-4 py-10 md:py-14", className)}>{children}</section>
+  <section className={cn("mx-auto max-w-7xl px-4 py-10 md:py-14", className)}>{children}</section>
 );
 
 function Heading({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
@@ -156,14 +156,14 @@ function Hero({ s, first }: { s: SectionOf<"hero">; first: boolean }) {
                   ? "bg-black/45"
                   : "bg-white/60"
                 : dark
-                  ? "bg-gradient-to-r from-black/70 via-black/40 to-black/10"
+                  ? "bg-gradient-to-r from-black/75 via-black/45 to-black/5"
                   : "bg-gradient-to-r from-white/85 via-white/50 to-white/0",
             )}
           />
         )}
         <div
           className={cn(
-            "hero-enter relative mx-auto grid w-full max-w-6xl gap-4 px-4 py-16",
+            "hero-enter relative mx-auto grid w-full max-w-7xl gap-4 px-4 py-16",
             parallax && "hero-scroll",
             slide.align === "center" && "justify-items-center text-center",
           )}

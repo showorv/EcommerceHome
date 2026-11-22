@@ -40,12 +40,12 @@ export function ProductRail({ products, label }: { products: CardProduct[]; labe
       <ul
         ref={track}
         aria-label={label}
-        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-2 sm:gap-4 [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-2 sm:gap-5 [&::-webkit-scrollbar]:hidden"
       >
         {products.map((p, i) => (
           <li
             key={p.id}
-            className="reveal-item w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[calc(25%-0.75rem)]"
+            className="reveal-item w-[46%] shrink-0 snap-start md:w-[calc(33.333%-0.85rem)] xl:w-[calc(25%-0.95rem)]"
             style={staggerStyle(i)}
           >
             <ProductCard product={p} eager={i < 2} />

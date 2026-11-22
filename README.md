@@ -302,6 +302,97 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Storefront design round 1 — light shop, bigger cards, product menu, demo catalogue
+
+- **Light by default:** the shop no longer turns dark on phones and computers set to dark mode. The
+  saved theme was switched from "follow the device" to "Always light" (Admin → Appearance can change
+  it back), and new shops start light. The admin keeps its own dark mode.
+- **Product card:**
+  - Bigger cards: the store is 1280 px wide (was 1152), grids are 2 / 3 / 4 across (3 next to the
+    filters), and carousels show 3–4 cards.
+  - An eye button (top right) opens quick view. The "Quick view / Options" bar and the heart are gone
+    from cards; the heart is on the product page and in quick view (the wishlist page keeps it to
+    remove items).
+  - One-option products still get an "Add to cart" button that slides up on hover.
+  - Discount and labels sit top left.
+- **Menu with products** (like the reference shop): pointing at a category or collection in the header
+  opens a panel with its sub-categories on the left and four product cards on the right. Pointing at a
+  sub-category swaps the cards, and a highlight glides between them. The page behind dims. The panel
+  fades and slides in and the cards rise in one after another; reduced-motion settings are respected.
+  Photos load on first hover only. A menu with columns built in Admin → Storefront keeps its column
+  layout.
+- **Fixed:** the automatic category menu gave categories created in the same second the same id, so
+  two menu items lit up together.
+- **Demo catalogue** for judging the design (development only):
+  - `pnpm demo:seed` adds 38 products with 2 photos each (free Unsplash photos, saved as
+    `public/uploads/images/demo-*.jpg`, not committed). It also adds options, sale prices, ratings,
+    "Only 4 left" and "Sold out" examples.
+  - It adds 10 categories (sub-categories under Kitchen Gadgets and Decoration, plus Bags & Travel and
+    Electronics), the collections "Editor's Picks" and "On Sale", and a full home page (slider,
+    categories, carousels, banner, reviews, FAQ, newsletter).
+  - `pnpm demo:remove` deletes exactly that and puts the home page back.
+- **Checked in the browser** (desktop and phone): home, category, collection, product, search, cart
+  drawer and page, checkout, track, account sign-in and the About page. Tests, lint, types, format and
+  the production build pass.
+- **Pages to review:** `/`, `/c/kitchen-gadgets`, `/c/bags-and-travel`, `/collections/on-sale`,
+  `/collections/editors-picks`, `/p/non-stick-frying-pan`, `/search?q=bag`, `/cart`, `/checkout`,
+  `/track`, `/account`, `/account/wishlist`, `/pages/about` (also privacy, terms, returns, shipping,
+  faq, contact).
+- Committed and pushed together with the 3.6 deploy set-up (one commit). Footer menus, logo and
+  contact details are still empty (set them in Admin → Storefront).
+
+**Next:** your design feedback on these pages, then Phase 3.7 (backups).
+
+### 2026-11-23 · Phase 3.6 — Production deploy, ready to go (free: Oracle Cloud + Cloudflare)
+
+- **Plan (free):** one Oracle Cloud "Always Free" ARM server (4 CPUs, 24 GB) runs everything in
+  Docker; Cloudflare Free in front; MongoDB on the server with the daily off-site backups of 3.7.
+  Only the domain costs money (about $10 a year; a free DuckDNS name works until then).
+- **Step-by-step guide: [docs/deploy.md](docs/deploy.md)** — creating the server, opening ports,
+  Docker, the deploy key, Cloudflare, settings, first start, owner account, Sentry, uptime alerts
+  and updating.
+- **Production stack** (`Dockerfile`, `deploy/compose.yml`):
+  - **Caddy**: HTTPS certificates (Let's Encrypt, renewed by itself), HTTP → HTTPS, compression,
+    HTTP/3. It hands the app the visitor's real address and believes Cloudflare's header only from
+    Cloudflare's published addresses (checked against cloudflare.com/ips today), so per-IP limits
+    can't be dodged. No access logs (they'd hold visitors' addresses).
+  - **web** and **worker** from one image (Node 24, Chromium for invoice PDFs). The build reads
+    the settings as a BuildKit secret, so no password ends up in the image (checked).
+  - **MongoDB 8** replica set (for transactions) with sign-in required, an internal key file, and
+    the shop's own user limited to its database; **Redis** with a password. Neither is reachable
+    from the internet.
+  - Health checks, automatic restarts, and logs per service kept at 5 × 20 MB.
+  - The worker and scripts refresh store pages directly (`INTERNAL_APP_URL`), not through Cloudflare.
+- **Sentry error tracking** (free plan) for the server, the worker (jobs that used up their tries)
+  and the browser. The browser part downloads Sentry only when an error happens, so pages stay
+  light. Reports carry no cookies, form data, IP addresses or query strings. Off without a DSN.
+- **Uptime alerts:** UptimeRobot (free) on `/api/health`, set up from the guide (NFR-AV-01).
+- **Auto-deploy on push** (`.github/workflows/deploy.yml`, `deploy/update.sh`):
+  - When CI passes on `main`, GitHub connects to the server and runs `update.sh`. The script pulls
+    the code (fast-forward only), rebuilds, waits for every service to be healthy, then removes old
+    images.
+  - Pull requests and failed CI never deploy. Deploys queue rather than overlap, and the workflow
+    can also be run by hand from the Actions tab.
+  - The GitHub key can only run that one script (a forced command, `restrict`).
+  - The server's own key is pinned, so GitHub won't connect to an impostor.
+  - The workflow does nothing until the `DEPLOY_*` secrets are set; set-up is in docs/deploy.md §9.
+  - The script was dry-run here against a throwaway repository, including updating itself mid-run;
+    it hasn't run on a real server yet.
+- **Tested on this Mac** with the real production stack in Docker (arm64, like the Oracle server):
+  image built against the database, all five services healthy, pages, admin sign-in, robots,
+  sitemap and share image over HTTPS, security headers including HSTS, HTTP → HTTPS, the worker
+  running jobs, invoice PDFs printing with Bangla text in the container, MongoDB refusing anonymous
+  access, and creating the owner account. Then removed (containers, data, settings, image).
+  - The fake-IP protection follows Caddy's documented behaviour; it wasn't tested end to end here.
+- **Not covered:** zero-downtime deploys and preview environments per pull request (NFR-AV-04).
+  Updates rebuild while the old version keeps serving; the switch takes a few seconds.
+- 2 new tests (352 total); lint, types, formatting and the production build pass.
+- **What you need to do:** sign up for Oracle Cloud and follow docs/deploy.md. 3.6 gets its tick
+  once the shop is live on your server.
+- Committed and pushed together with storefront design round 1 (one commit).
+
+**Next:** Phase 3.7 — daily backups kept 30 days, plus a restore test.
+
 ### 2026-11-23 · Phase 3.5 — Analytics: Meta Pixel + Conversions API, GA4, TikTok
 
 - **Admin → Integrations → Marketing & analytics** (owner only): the Meta Pixel ID, Meta Conversions
@@ -334,7 +425,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Not from these tests:** a sign-in to the owner account at 01:57 and a customer's cart with 2
   choppers (created 01:52) appeared in the database; I left them as they are.
 - 8 new tests (350 total); lint, types, formatting and the production build pass.
-- Not committed yet.
+- Committed and pushed (8026e63).
 
 **Next:** Phase 3.6 — production deploy: VPS + Docker Compose behind Cloudflare, Sentry, uptime
 alerts, logs.

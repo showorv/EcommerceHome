@@ -8,6 +8,7 @@ import { HeaderSearch, HeaderSearchFallback } from "@/components/store/header-se
 import { QuickViewHost } from "@/components/store/quick-view";
 import { getCategoryTree } from "@/modules/catalog/category-tree";
 import { chatLive, SOCIAL_NAMES, themeCss, type Design, type MenuItem } from "@/modules/storefront/design";
+import { getMenuPreviews } from "@/modules/storefront/menu-preview";
 import { AnnouncementBar } from "./announcement-bar";
 import { ChatButton } from "./chat-button";
 import { DesktopNav } from "./desktop-nav";
@@ -32,6 +33,7 @@ export async function StoreShell({
   const name = process.env.STORE_NAME ?? "Store";
   const { navigation: nav, theme } = design;
   const items = nav.header.length ? nav.header : await categoryMenu();
+  const previews = await getMenuPreviews(items);
   const showAnnouncement = nav.announcement.enabled && nav.announcement.messages.length > 0;
 
   return (
@@ -43,7 +45,7 @@ export async function StoreShell({
         {banner}
         {showAnnouncement && <AnnouncementBar announcement={nav.announcement} />}
         <header className="bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
-          <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 md:h-16">
+          <div className="relative mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 md:h-16">
             <div className="flex shrink-0 items-center gap-1">
               <MobileMenu items={items} storeName={name} />
               <Link href="/" className="flex items-center text-lg font-bold tracking-tight" aria-label={`${name} home`}>
@@ -80,8 +82,8 @@ export async function StoreShell({
           </div>
           {items.length > 0 && (
             <nav aria-label="Main" className="hidden border-t md:block">
-              <div className="relative mx-auto max-w-6xl px-3 py-1">
-                <DesktopNav items={items} />
+              <div className="relative mx-auto max-w-7xl px-3 py-1">
+                <DesktopNav items={items} previews={previews} />
               </div>
             </nav>
           )}
@@ -106,7 +108,7 @@ async function categoryMenu(): Promise<MenuItem[]> {
     .filter((c) => c.active && c.parentId === null)
     .slice(0, 8)
     .map((c) => ({
-      id: `cat-${c.id}`.slice(0, 24),
+      id: c.id, // unique (a "cat-" prefix cut to 24 characters made ids from the same second collide)
       label: c.name.en,
       href: `/c/${c.slug}`,
       badge: "",
@@ -122,7 +124,7 @@ function Footer({ design, name }: { design: Design; name: string }) {
   return (
     <footer className="bg-muted/40 mt-10 border-t">
       {hasTop && (
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
           {(f.about || f.social.length > 0) && (
             <div className="grid content-start gap-4">
               <p className="text-lg font-bold tracking-tight">{name}</p>

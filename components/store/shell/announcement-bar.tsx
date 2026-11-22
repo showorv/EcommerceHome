@@ -68,7 +68,7 @@ export function AnnouncementBar({ announcement }: { announcement: Navigation["an
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      <div className="mx-auto grid max-w-6xl px-10 py-2">
+      <div className="mx-auto grid max-w-7xl px-10 py-2">
         {messages.map((m, i) => (
           <p
             key={i}

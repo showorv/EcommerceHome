@@ -28,6 +28,8 @@ const PIXEL_CONNECT = [
   "https://*.tiktok.com",
   "https://*.tiktokw.us",
 ];
+/** Error reports from the browser (Sentry, NFR-AV-03). */
+const ERROR_REPORTS = ["https://*.sentry.io"];
 const PIXEL_IMAGES = [
   "https://www.facebook.com",
   "https://*.google-analytics.com",
@@ -50,7 +52,7 @@ export function storefrontCsp(isDev: boolean, https = !isDev, framedBySelf = fal
     "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS, ...PIXEL_IMAGES],
     "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
     "font-src": ["'self'"],
-    "connect-src": ["'self'", ...PIXEL_CONNECT, ...(isDev ? ["ws:"] : [])],
+    "connect-src": ["'self'", ...PIXEL_CONNECT, ...ERROR_REPORTS, ...(isDev ? ["ws:"] : [])],
     "frame-src": ["https://www.youtube-nocookie.com", "https://www.youtube.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
@@ -69,7 +71,7 @@ export function adminCsp(nonce: string, isDev: boolean, https = !isDev): string 
     "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS],
     "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
     "font-src": ["'self'"],
-    "connect-src": ["'self'", "https://api.cloudinary.com", ...(isDev ? ["ws:"] : [])],
+    "connect-src": ["'self'", "https://api.cloudinary.com", ...ERROR_REPORTS, ...(isDev ? ["ws:"] : [])],
     "frame-src": ["'self'"], // the storefront builder's draft preview
     "object-src": ["'none'"],
     "base-uri": ["'self'"],

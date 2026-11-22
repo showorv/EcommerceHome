@@ -180,7 +180,7 @@ export const themeSchema = z.object({
   banglaFont: z.enum(Object.keys(BANGLA_FONTS) as [BanglaFontId, ...BanglaFontId[]]).default("hind"),
   radius: z.enum(Object.keys(RADII) as [keyof typeof RADII, ...(keyof typeof RADII)[]]).default("medium"),
   /** "system" follows the shopper's phone or computer setting. */
-  mode: z.enum(["system", "light", "dark"]).default("system"),
+  mode: z.enum(["system", "light", "dark"]).default("light"),
   motion: z.enum(["full", "reduced", "off"]).default("full"),
   logo: imageField,
   logoHeight: z.coerce.number().int().min(20).max(64).default(32),

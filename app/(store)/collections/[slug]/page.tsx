@@ -55,7 +55,7 @@ export default async function CollectionPage({ params, searchParams }: PageProps
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-4 pb-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdString(breadcrumbJsonLd(crumbs, env().APP_URL)) }}

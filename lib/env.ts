@@ -16,6 +16,11 @@ const schema = z
     APP_URL: z.url().default("http://localhost:3000"),
     STORE_NAME: z.string().min(1).default("China Import Store"),
     /**
+     * Where the worker and scripts reach the web app directly (in Docker: http://web:3000), so page
+     * refreshes don't go out through Cloudflare and back. Unset = APP_URL.
+     */
+    INTERNAL_APP_URL: z.url().optional(),
+    /**
      * Whether search engines may index the shop (robots.txt and meta robots, NFR-UX-01). Unset = yes
      * when APP_URL is https, no on plain http. Set "off" on staging so it never shows up in Google.
      */

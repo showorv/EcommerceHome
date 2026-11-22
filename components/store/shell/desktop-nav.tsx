@@ -1,21 +1,29 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { useMotionLevel } from "@/components/motion/motion-provider";
 import { cn } from "@/lib/utils";
 import type { MenuItem } from "@/modules/storefront/design";
 import { isMega } from "@/modules/storefront/design-links";
+import type { MenuPreview } from "@/modules/storefront/menu-preview";
+import { MenuPreviewPanel } from "./menu-preview-panel";
 
 /**
  * Header menu on tablets and computers (FR-SF-02). Items with columns open a dropdown, or a full-width
- * mega-menu when the columns have links. Opens on hover (with a short delay so passing over doesn't
- * flicker), on click / Enter, and closes on Escape, a click elsewhere, or navigating.
+ * mega-menu when the columns have links. A category or collection link shows a product preview panel
+ * (menu-preview-panel.tsx) and dims the page behind it. Opens on hover (with a short delay so passing
+ * over doesn't flicker), on click / Enter, and closes on Escape, a click elsewhere, or navigating.
  */
-export function DesktopNav({ items }: { items: MenuItem[] }) {
+export function DesktopNav({ items, previews = {} }: { items: MenuItem[]; previews?: Record<string, MenuPreview> }) {
   const [open, setOpen] = useState<string | null>(null);
+  const level = useMotionLevel();
+  const reduce = useReducedMotion() || level === "off";
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -57,12 +65,30 @@ export function DesktopNav({ items }: { items: MenuItem[] }) {
     <div ref={root} onPointerLeave={() => later(() => setOpen(null), 150)}>
       <ul className="flex items-center gap-1">
         {items.map((item) => {
-          const hasMenu = item.children.length > 0;
+          const preview = previews[item.id];
+          const hasMenu = !preview && item.children.length > 0;
           const panelId = `${baseId}-${item.id}`;
           const isOpen = open === item.id;
           return (
-            <li key={item.id} className={cn(!isMega(item) && "relative")}>
-              {hasMenu ? (
+            <li key={item.id} className={cn(!isMega(item) && !preview && "relative")}>
+              {preview ? (
+                <Link
+                  href={item.href || "/"}
+                  data-menu={item.id}
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  onPointerEnter={(e) => e.pointerType === "mouse" && later(() => setOpen(item.id), open ? 0 : 120)}
+                  onFocus={() => later(() => setOpen(item.id), 0)}
+                  onClick={() => setOpen(null)}
+                  className={cn(
+                    "relative flex h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition-colors",
+                    isOpen ? "bg-foreground text-background" : "hover:bg-accent",
+                  )}
+                >
+                  {item.label}
+                  {item.badge && <Badge text={item.badge} />}
+                </Link>
+              ) : hasMenu ? (
                 <button
                   type="button"
                   data-menu={item.id}
@@ -102,11 +128,66 @@ export function DesktopNav({ items }: { items: MenuItem[] }) {
                   {isMega(item) ? <MegaPanel item={item} /> : <DropdownPanel item={item} />}
                 </div>
               )}
+              {/* Only drawn while open, so its photos load on first hover rather than with every page. */}
+              <AnimatePresence>
+                {preview && isOpen && (
+                  <motion.div
+                    id={panelId}
+                    key={item.id}
+                    onPointerEnter={() => later(() => setOpen(item.id), 0)}
+                    initial={reduce ? false : { opacity: 0, y: -10, scale: 0.985 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={
+                      reduce
+                        ? { opacity: 0, transition: { duration: 0 } }
+                        : { opacity: 0, y: -6, transition: { duration: 0.15 } }
+                    }
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    className="bg-popover text-popover-foreground absolute inset-x-0 top-full z-50 mt-1 origin-top rounded-3xl border p-7 shadow-[0_30px_60px_-20px_rgb(0_0_0/0.25)]"
+                  >
+                    <MenuPreviewPanel
+                      label={item.label}
+                      href={item.href}
+                      preview={preview}
+                      onNavigate={() => setOpen(null)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </li>
           );
         })}
       </ul>
+      <Backdrop show={open !== null && Boolean(previews[open])} reduce={reduce} />
     </div>
+  );
+}
+
+/** Dims the page under the header while a product preview is open. */
+const noop = () => () => {};
+
+function Backdrop({ show, reduce }: { show: boolean; reduce: boolean }) {
+  // Portals need the page, which the server render doesn't have.
+  const mounted = useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
+  if (!mounted) return null;
+  return createPortal(
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-30 bg-black/25 backdrop-blur-[2px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduce ? 0 : 0.25 }}
+        />
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
 

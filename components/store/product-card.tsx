@@ -16,19 +16,29 @@ import { prefetchQuickView, useOpenQuickView } from "./quick-view";
 import { WishlistButton } from "./wishlist-button";
 
 /**
- * Storefront product card (FR-PC-01…03, 05, 07).
- * - Desktop: hovering cross-fades to the admin-chosen second image (or plays a muted video), the card
- *   lifts on a spring and an action bar slides up. Keyboard focus shows the same bar.
+ * Storefront product card (FR-PC-01…03, 05, 07): photo, name, price.
+ * - An eye button (top right) opens quick view. The wishlist heart lives on the product page.
+ * - Desktop: hovering cross-fades to the admin-chosen second image (or plays a muted video) and the
+ *   card lifts. A one-option product also gets an "Add to cart" button sliding up (keyboard focus too).
  * - Touch: swipe left/right over the image to see more photos; dots show where you are.
  * - Fixed square frame + blur placeholder, so nothing jumps while images load.
  */
 
-const SIZES = "(min-width: 1280px) 280px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
+const SIZES = "(min-width: 1280px) 320px, (min-width: 768px) 33vw, 50vw";
 
-const lift: Variants = { rest: { y: 0, scale: 1 }, active: { y: -6, scale: 1.02 } };
+const lift: Variants = { rest: { y: 0 }, active: { y: -4 } };
 const bar: Variants = { rest: { y: "110%", opacity: 0 }, active: { y: 0, opacity: 1 } };
 
-export function ProductCard({ product, eager = false }: { product: CardProduct; eager?: boolean }) {
+export function ProductCard({
+  product,
+  eager = false,
+  wishlist = false,
+}: {
+  product: CardProduct;
+  eager?: boolean;
+  /** Show the heart (the wishlist page, where it removes the product). */
+  wishlist?: boolean;
+}) {
   const level = useMotionLevel();
   const reduce = useReducedMotion();
   const canLift = level === "full" && !reduce;
@@ -54,7 +64,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
   }
   const prefetch = () => prefetchQuickView(product.slug);
   const title = product.title.en;
-  // One option and in stock: the card adds it straight to the cart. Otherwise quick view picks options.
+  // One option and in stock: the card can add it straight to the cart. Otherwise quick view picks options.
   const oneClick = product.inStock && product.variantCount === 1;
   const adding = useCartAdding();
 
@@ -86,7 +96,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
 
   return (
     <motion.article
-      className="group/card bg-card relative flex h-full flex-col rounded-xl border p-2 shadow-sm transition-shadow duration-300 hover:shadow-xl sm:p-2.5"
+      className="group/card bg-card relative flex h-full flex-col overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition-shadow duration-300 hover:shadow-[0_18px_40px_-12px_rgb(0_0_0/0.18)]"
       variants={canLift ? lift : undefined}
       initial="rest"
       animate={active ? "active" : "rest"}
@@ -99,7 +109,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
       }}
     >
       <div
-        className="bg-muted relative aspect-square touch-pan-y overflow-hidden rounded-lg"
+        className="bg-muted relative aspect-square touch-pan-y overflow-hidden"
         onPointerDown={onTouchDown}
         onPointerUp={onTouchUp}
       >
@@ -123,7 +133,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
                     "transition-[opacity,transform] duration-500 ease-out",
                     visible ? "opacity-100" : "opacity-0",
                     isHoverLayer && "[@media(hover:hover)]:group-hover/card:opacity-100",
-                    i === 0 && media.length > 1 && "[@media(hover:hover)]:group-hover/card:scale-105",
+                    "[@media(hover:hover)]:group-hover/card:scale-[1.04]",
                   )}
                 />
               );
@@ -131,10 +141,14 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           )}
         </Link>
 
-        {/* Labels (top-left) and discount (top-right) */}
-        {/* One row, so on narrow phone cards the labels wrap below instead of hiding under the discount. */}
-        <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-1">
+        {/* Labels and discount (top left), quick view and wishlist (top right) */}
+        <div className="pointer-events-none absolute inset-x-2.5 top-2.5 flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap gap-1">
+            {(product.discount > 0 || product.maxDiscount > 0) && (
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white shadow-sm">
+                {product.discount > 0 ? `−${product.discount}%` : `Up to −${product.maxDiscount}%`}
+              </span>
+            )}
             {product.labels.slice(0, 2).map((l) => (
               <span
                 key={l}
@@ -149,13 +163,19 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
               </span>
             ))}
           </div>
-          <div className="flex shrink-0 items-start gap-1">
-            {(product.discount > 0 || product.maxDiscount > 0) && (
-              <span className="mt-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white shadow-sm">
-                {product.discount > 0 ? `−${product.discount}%` : `Up to −${product.maxDiscount}%`}
-              </span>
-            )}
-            <WishlistButton productId={product.id} title={title} className="pointer-events-auto size-8" />
+          <div className="flex shrink-0 flex-col gap-1.5">
+            <Link
+              href={href}
+              onClick={quickView}
+              onPointerEnter={prefetch}
+              onFocus={prefetch}
+              className="bg-background/90 text-foreground hover:bg-foreground hover:text-background focus-visible:ring-ring pointer-events-auto grid size-9 place-items-center rounded-full shadow-md backdrop-blur transition-[background-color,color,transform] duration-200 hover:scale-110 focus-visible:ring-2 focus-visible:outline-none"
+              aria-label={`Quick view: ${title}`}
+              title="Quick view"
+            >
+              <Eye className="size-[18px]" aria-hidden />
+            </Link>
+            {wishlist && <WishlistButton productId={product.id} title={title} className="pointer-events-auto size-9" />}
           </div>
         </div>
 
@@ -167,7 +187,7 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
               product.stock.kind === "soldOut"
                 ? "bg-foreground text-background"
                 : "bg-background/90 text-destructive backdrop-blur",
-              active && "opacity-0",
+              active && oneClick && "[@media(hover:hover)]:opacity-0",
             )}
           >
             {product.stock.kind === "soldOut" ? "Sold out" : `Only ${product.stock.left} left`}
@@ -192,59 +212,34 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
           </div>
         )}
 
-        {/* Action bar: slides up on hover or keyboard focus */}
-        <motion.div
-          className="absolute inset-x-2 bottom-2 hidden gap-1.5 [@media(hover:hover)]:flex"
-          variants={bar}
-          initial="rest"
-          animate={active ? "active" : "rest"}
-          transition={reduce || level === "off" ? { duration: 0 } : SPRING}
-        >
-          {/* "Options" opens quick view to choose a variant; a single-option product goes straight to the cart. */}
-          <Link
-            href={href}
-            onClick={quickView}
-            onPointerEnter={prefetch}
-            onFocus={prefetch}
-            className="bg-background/95 hover:bg-background focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium shadow-md backdrop-blur focus-visible:ring-2 focus-visible:outline-none"
-            aria-label={`Quick view: ${title}`}
+        {/* One-option products: "Add to cart" slides up on hover or keyboard focus */}
+        {oneClick && (
+          <motion.div
+            className="absolute inset-x-2.5 bottom-2.5 hidden [@media(hover:hover)]:flex"
+            variants={bar}
+            initial="rest"
+            animate={active ? "active" : "rest"}
+            transition={reduce || level === "off" ? { duration: 0 } : SPRING}
           >
-            <Eye className="size-4" aria-hidden /> Quick view
-          </Link>
-          {oneClick ? (
             <button
               type="button"
               disabled={adding}
               onClick={() => void addToCart({ productId: product.id })}
-              className="bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none disabled:opacity-70"
+              className="bg-foreground text-background hover:bg-brand hover:text-brand-foreground focus-visible:ring-ring flex h-10 flex-1 items-center justify-center gap-2 rounded-full text-sm font-semibold shadow-lg transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-70"
               aria-label={`Add to cart: ${title}`}
             >
               <ShoppingBag className="size-4" aria-hidden />
               Add to cart
             </button>
-          ) : (
-            <Link
-              href={href}
-              onClick={product.inStock ? quickView : undefined}
-              onPointerEnter={prefetch}
-              className={cn(
-                "bg-brand text-brand-foreground hover:bg-brand/90 focus-visible:ring-ring flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-semibold shadow-md focus-visible:ring-2 focus-visible:outline-none",
-                !product.inStock && "bg-muted text-muted-foreground hover:bg-muted",
-              )}
-              aria-label={`${product.inStock ? "Choose options" : "View"}: ${title}`}
-            >
-              <ShoppingBag className="size-4" aria-hidden />
-              {product.inStock ? "Options" : "View"}
-            </Link>
-          )}
-        </motion.div>
+          </motion.div>
+        )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-1 px-1 pt-2.5 pb-1">
-        <h3 className="line-clamp-2 min-h-[2.5em] text-sm leading-tight font-medium">
+      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
+        <h3 className="line-clamp-2 min-h-[2.5em] text-sm leading-snug font-medium sm:text-[15px]">
           <Link
             href={href}
-            className="focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="focus-visible:ring-ring rounded-sm hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
           >
             {title}
           </Link>
@@ -259,11 +254,11 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
             </span>
           </p>
         )}
-        <p className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-1">
+        <p className="mt-auto flex flex-wrap items-baseline gap-x-2 pt-1">
           {product.priceMax > product.price && <span className="text-muted-foreground text-xs">From</span>}
-          <span className="text-base font-bold tabular-nums">{formatTaka(product.price)}</span>
+          <span className="text-base font-bold tabular-nums sm:text-lg">{formatTaka(product.price)}</span>
           {product.compareAt > 0 && (
-            <span className="text-muted-foreground text-xs tabular-nums line-through">
+            <span className="text-muted-foreground text-sm tabular-nums line-through">
               <span className="sr-only">was </span>
               {formatTaka(product.compareAt)}
             </span>

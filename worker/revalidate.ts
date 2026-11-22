@@ -7,13 +7,13 @@ import { logger } from "@/lib/logger";
  */
 export async function revalidateStore(tags: string[]): Promise<void> {
   if (tags.length === 0) return;
-  const { REVALIDATE_SECRET: secret, APP_URL } = env();
+  const { REVALIDATE_SECRET: secret, APP_URL, INTERNAL_APP_URL } = env();
   if (!secret) {
     logger.warn({ count: tags.length }, "REVALIDATE_SECRET not set: store pages not rebuilt after a stock change");
     return;
   }
   try {
-    const res = await fetch(new URL("/api/internal/revalidate", APP_URL), {
+    const res = await fetch(new URL("/api/internal/revalidate", INTERNAL_APP_URL ?? APP_URL), {
       method: "POST",
       headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
       body: JSON.stringify({ tags: tags.slice(0, 500) }),

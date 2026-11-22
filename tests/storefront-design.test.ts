@@ -104,7 +104,10 @@ describe("theme", () => {
     expect(css).toContain("--brand-foreground:#ffffff;");
     expect(css).toContain("--radius:1.125rem;");
     expect(css).toContain("--font-sans-latin:var(--ff-inter);");
-    expect(css).toContain("@media (prefers-color-scheme: dark)");
+    // The shop is light unless the admin picks otherwise.
+    expect(css).toContain("color-scheme:light");
+    expect(css).not.toContain("@media");
+    expect(themeCss({ ...t, mode: "system" })).toContain("@media (prefers-color-scheme: dark)");
     const dark = themeCss({ ...t, mode: "dark" });
     expect(dark).toContain("color-scheme:dark");
     expect(dark).toContain(`--background:${DARK_TOKENS.background};`);

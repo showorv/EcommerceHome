@@ -61,7 +61,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[slug]">) {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4 pb-28 md:pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-4 pb-28 md:pb-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(productJsonLd(p, base)) }} />
       <script
         type="application/ld+json"

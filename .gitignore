@@ -48,3 +48,7 @@ next-env.d.ts
 
 # load test (scripts/load): test numbers and tokens
 /.loadtest/
+
+# production settings and keys (deploy/)
+/deploy/.env.production
+/deploy/secrets/

@@ -29,7 +29,7 @@ export function warmAfterResponse(tags: string[]) {
   const paths = warmPaths(tags);
   if (paths.length === 0) return;
   after(async () => {
-    const base = env().APP_URL;
+    const base = env().INTERNAL_APP_URL ?? env().APP_URL;
     for (const path of paths) {
       try {
         const res = await fetch(new URL(path, base), {

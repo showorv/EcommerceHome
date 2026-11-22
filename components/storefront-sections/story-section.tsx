@@ -101,7 +101,7 @@ export function StorySection({ data }: { data: Data }) {
     <section ref={root} className="group/story" aria-label={data.heading || "Product story"}>
       <div data-stage className="w-full group-data-[pinned]/story:h-svh">
         {/* GSAP fixes the pinned element's width, so the centred container sits inside it. */}
-        <div className="mx-auto flex h-full max-w-6xl flex-col px-4 py-10 group-data-[pinned]/story:justify-center group-data-[pinned]/story:pt-28 group-data-[pinned]/story:pb-10 md:py-14">
+        <div className="mx-auto flex h-full max-w-7xl flex-col px-4 py-10 group-data-[pinned]/story:justify-center group-data-[pinned]/story:pt-28 group-data-[pinned]/story:pb-10 md:py-14">
           {(data.heading || data.intro) && (
             <header className="mb-8 grid max-w-2xl gap-2 group-data-[pinned]/story:mb-6">
               {data.heading && (

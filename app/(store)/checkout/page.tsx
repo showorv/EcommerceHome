@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default async function CheckoutPage() {
   const [config, payments] = await Promise.all([getDeliveryConfig(), getPaymentConfig()]);
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-6 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-6 pb-16">
       <h1 className="mb-6 text-2xl font-bold tracking-tight md:text-3xl">Checkout</h1>
       <CheckoutView config={config} wallets={payments.wallets} />
     </div>
