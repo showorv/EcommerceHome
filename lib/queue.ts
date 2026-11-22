@@ -46,6 +46,14 @@ export const OTP_JOB_OPTIONS = {
 
 export const isOtpPurpose = (purpose: string) => /(^|_)otp$/.test(purpose);
 
+/** Jobs on the orders queue. */
+export const ORDER_JOBS = { releaseReservations: "release-reservations", invoicePdf: "invoice-pdf" } as const;
+
+/** Prints an invoice's PDF in the worker (FR-OR-03), so it is ready before anyone opens the link. */
+export function enqueueInvoicePdf(invoiceId: string) {
+  return getQueue(QUEUE_NAMES.orders).add(ORDER_JOBS.invoicePdf, { invoiceId }, { attempts: 3 });
+}
+
 export function enqueueNotification(job: NotificationJob) {
   const opts = isOtpPurpose(job.purpose) ? OTP_JOB_OPTIONS : undefined;
   return getQueue(QUEUE_NAMES.notifications).add(job.kind, job, opts);

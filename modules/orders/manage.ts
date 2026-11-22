@@ -8,6 +8,7 @@ import { InventoryMovement, Variant } from "@/modules/catalog/models";
 import { CouponModel } from "@/modules/coupons/models";
 import { zoneIdFor } from "@/modules/delivery/charge";
 import { getDeliveryConfig } from "@/modules/delivery/data";
+import { issueInvoice, loadInvoiceSettings, type Issued } from "@/modules/invoices/data";
 import { toAdminOrder } from "./admin-data";
 import {
   canMove,
@@ -159,6 +160,7 @@ async function syncProducts(items: AnyDoc[], session: mongoose.ClientSession): P
 }
 
 export type ActionDone = { before: AdminOrder; after: AdminOrder; productIds: string[] };
+export type ConfirmDone = ActionDone & { invoice: Issued };
 
 async function reread(orderNo: string): Promise<AdminOrder> {
   const d = await Order.findOne({ orderNo }).lean<AnyDoc>();
@@ -169,12 +171,13 @@ async function reread(orderNo: string): Promise<AdminOrder> {
 
 /**
  * Confirmed: the held units leave the stock for good (an "order" movement each). If the hold already
- * ran out, the units are taken now, only if enough are free. An advance is marked checked.
+ * ran out, the units are taken now, only if enough are free. An advance is marked checked, and the
+ * invoice is issued in the same transaction (FR-OR-03).
  */
 export async function confirmOrder(
   input: { orderNo: string; rev: number; advanceChecked: boolean; note: string },
   by: Actor,
-): Promise<ActionDone> {
+): Promise<ConfirmDone> {
   const d = await load(input.orderNo);
   checkMove(d, "confirmed", input.rev);
   const advanceToCheck = needsAdvanceCheck({ advance: d.advance ?? null });
@@ -183,10 +186,14 @@ export async function confirmOrder(
   }
   const held = d.reservation?.active === true;
   const now = new Date();
+  const { settings: invoiceSettings } = await loadInvoiceSettings();
   let productIds: string[] = [];
+  let invoice: Issued | null = null;
 
   await inTransaction(async (session) => {
+    invoice = await issueInvoice(d, invoiceSettings, now, session);
     const set: Record<string, unknown> = {
+      invoiceId: invoice.id,
       status: "confirmed",
       confirmedAt: now,
       confirmedBy: by.id,
@@ -255,7 +262,7 @@ export async function confirmOrder(
     productIds = await syncProducts(d.items ?? [], session);
   });
 
-  return { before: toAdminOrder(d), after: await reread(d.orderNo), productIds };
+  return { before: toAdminOrder(d), after: await reread(d.orderNo), productIds, invoice: invoice! };
 }
 
 // ---------- Hold, and back to the call queue ----------

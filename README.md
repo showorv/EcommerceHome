@@ -115,7 +115,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
 - [x] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
 - [x] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
-- [ ] 2.11 Invoice: sequential number, PDF with Bangla font, signed token link with expiry/revoke (FR-OR-03…05)
+- [x] 2.11 Invoice: sequential number, PDF with Bangla font, signed token link with expiry/revoke (FR-OR-03…05)
 - [ ] 2.12 Email adapter (Resend/SES/Brevo) + React Email templates; editable SMS/email templates; notification log with retry (FR-OR-06/07)
 - [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4)
 - [ ] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
@@ -301,6 +301,66 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-22 · Phase 2.11 — Invoices
+
+- **Invoice number on confirmation** (FR-OR-03): every confirmed order gets `INV-2026-000001`, one
+  sequence per year in Dhaka time. The number is taken inside the confirmation itself, so a failed
+  confirmation gives the number back and there are no gaps.
+- **What the invoice shows is fixed at confirmation**: shop details, customer, address, items,
+  discount, delivery, total, advance (wallet and the last 4 characters of the TrxID only) and the
+  amount to pay on delivery. Later edits never change an issued invoice.
+- **Private link** (FR-OR-04): `/i/<token>`, a random 22-character code. The database keeps only its
+  hash for lookups, plus an encrypted copy for the QR code and the admin "Copy link". It works for
+  90 days by default.
+  - The confirmation SMS now ends with "Invoice: <link>".
+  - An unknown, changed, expired or turned-off link shows "This invoice link doesn't work". It is
+    never indexed by search engines.
+  - Opening links is limited to 60 per 10 minutes per IP, so tokens can't be guessed.
+  - If the order is later cancelled or returned, the page says so above the invoice.
+- **PDF** (FR-OR-05): A4, Noto Sans Bengali built in, with a QR code back to the link.
+  - Printed by Chrome. react-pdf was tried first and broke Bangla conjuncts.
+  - Printed right after confirmation by the worker, or on the first download if the worker hasn't
+    done it yet. About 1–3 s to print, then served from storage.
+  - The PDF is stored in MongoDB next to the invoice, so it is private and backed up with the
+    database.
+  - Making a new link prints a new PDF, because its QR code points to the link.
+- **Admin:**
+  - The order page has an **Invoice card**: number, issued date, link state and expiry, Copy link,
+    PDF (always works for staff), **New link** (the old one stops at once; optionally SMS the new
+    one) and **Turn off link**.
+  - New page **Admin → Invoices** (`settings.manage`): shop name, phone, email, address, footer and
+    link lifetime (1–730 days). It applies to new invoices only.
+  - Audit log entries: `invoice.new_link`, `invoice.revoke_link`, `invoices.settings`, and the
+    invoice number on `order.confirm`.
+- **Checked in the browser** with 2 test orders, one with a Bangla name and address:
+  - confirming gave INV-2026-000001 and an SMS with the link
+  - the public page and the PDF show Bangla correctly; only "…1001" of the TrxID is printed
+  - a link with one character changed, a short one and `../etc` are all not found
+  - Turn off link → the link and its PDF stop working
+  - New link with SMS → the new link works, the old one stays dead, and the PDF is printed again
+  - settings saved (0 days refused) → the second confirmation printed INV-2026-000002 with the new
+    phone and address and a 30-day link
+  - cancelling the order shows the banner on the public page
+  - the rate limit kicks in after 60 opens; the page fits a phone screen
+- **Cleanup:** removed the test orders, both invoices, the invoice counter and the invoice settings
+  (neither existed before), stock movements, 6 audit entries, 3 SMS and 3 PDF jobs, and the
+  rate-limit keys. The chopper is back exactly as before. **Admin → Invoices is empty again:**
+  fill in your phone and address there before the first real order.
+- 11 new tests (278 total); lint, types, formatting and the production build pass.
+- **Good to know:**
+  - **Production** needs Chrome or Chromium on the server. Set `CHROMIUM_PATH` (see `.env.example`)
+    if it isn't the standard Google Chrome install.
+  - In the production build, a bad link shows the "doesn't work" page with HTTP 200 (the page
+    streams before the link is checked). It is marked noindex and shows nothing private. The PDF
+    address returns a real 404.
+  - Two old worker processes from 19 Nov are still running with pre-2.11 code. Restart
+    `npm run worker` so it picks up the invoice PDF jobs. Until then, PDFs are printed on first
+    download.
+- Committed.
+
+**Next:** Phase 2.12 — email adapter and templates, editable SMS/email templates, notification log
+with retry.
 
 ### 2026-11-22 · Phase 2.10 — Order state machine and payment status
 

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { trustFilter } from "@/lib/db/trusted-filter";
 import { logger } from "@/lib/logger";
-import { enqueueNotification } from "@/lib/queue";
+import { enqueueInvoicePdf, enqueueNotification } from "@/lib/queue";
+import { invoiceUrl } from "@/modules/invoices/invoices";
 import { writeAudit } from "@/modules/audit/audit";
 import type { Permission } from "@/modules/auth/rbac";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
@@ -100,12 +101,19 @@ async function refreshProducts(productIds: string[]) {
   if (productIds.length > 0) refreshTags(await productTags(await scopeOfProducts(productIds)));
 }
 
-async function sendConfirmedSms(o: AdminOrder) {
+/** After a confirmation: the PDF is printed in the background and the SMS carries the invoice link. */
+async function afterConfirm(o: AdminOrder, invoice: { id: string; token: string }) {
+  try {
+    await enqueueInvoicePdf(invoice.id);
+  } catch (err) {
+    // Not fatal: the PDF is printed when the link is first opened.
+    logger.error({ err, orderNo: o.orderNo }, "invoice PDF job could not be queued");
+  }
   try {
     await enqueueNotification({
       kind: "sms",
       to: o.customer.phone,
-      text: orderConfirmedSms(o, env().STORE_NAME),
+      text: orderConfirmedSms(o, env().STORE_NAME, invoiceUrl(env().APP_URL, invoice.token)),
       purpose: "order_confirmed",
     });
   } catch (err) {
@@ -134,9 +142,9 @@ export async function confirmOrderAction(raw: unknown): Promise<OrderActionResul
   if (!p.success) return { ok: false, error: firstIssue(p.error) };
   return run(async () => {
     const done = await confirmOrder(p.data, s.actor);
-    await audit(s, "order.confirm", done);
-    await sendConfirmedSms(done.after);
-    return `${done.after.orderNo} confirmed. The customer gets an SMS.`;
+    await audit(s, "order.confirm", done, { invoiceNo: done.invoice.invoiceNo });
+    await afterConfirm(done.after, done.invoice);
+    return `${done.after.orderNo} confirmed: invoice ${done.invoice.invoiceNo}. The customer gets an SMS with the link.`;
   });
 }
 
@@ -346,8 +354,8 @@ export async function bulkConfirmAction(raw: unknown): Promise<BulkResult> {
     // Bulk never ticks "advance checked" for staff: those orders are confirmed one by one.
     if (needsAdvanceCheck(o)) throw new OrderActionError("Has an advance to check: open it to confirm");
     const done = await confirmOrder({ orderNo: o.orderNo, rev: o.rev, advanceChecked: false, note: "" }, s.actor);
-    await audit(s, "order.confirm", done, { bulk: true });
-    await sendConfirmedSms(done.after);
+    await audit(s, "order.confirm", done, { bulk: true, invoiceNo: done.invoice.invoiceNo });
+    await afterConfirm(done.after, done.invoice);
   });
   refresh();
   return { ok: true, message: summary("confirmed", r.done.length, r.skipped.length), ...r };

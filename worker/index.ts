@@ -2,9 +2,10 @@ import "./load-env";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { getQueue, QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
+import { getQueue, ORDER_JOBS, QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
 import { bullConnection } from "@/lib/redis";
 import { productTags, scopeOfProducts } from "@/modules/catalog/product-tags";
+import { ensureInvoicePdf } from "@/modules/invoices/pdf";
 import { sendEmail } from "@/modules/notifications/email";
 import { smsProvider, SmsSendError } from "@/modules/notifications/sms";
 import { releaseExpiredReservations } from "@/modules/orders/reservations";
@@ -13,7 +14,8 @@ import { revalidateStore } from "./revalidate";
 /**
  * Background worker (SRS §6.1). Run with `pnpm worker`.
  * Queues: notifications (SMS + email) and orders (scheduled: stock held by orders not confirmed in
- * time goes back on sale, FR-CO-07). Later phases add PDF invoices, courier booking and image work.
+ * time goes back on sale, FR-CO-07; and invoice PDFs, FR-OR-03). Later phases add courier booking and
+ * image work.
  */
 env(); // fail fast on bad configuration
 
@@ -32,9 +34,16 @@ async function handleNotification(job: Job<NotificationJob>) {
   return { provider: "smtp", ...res };
 }
 
-const RELEASE_JOB = "release-reservations";
+const RELEASE_JOB = ORDER_JOBS.releaseReservations;
 
 async function handleOrders(job: Job) {
+  if (job.name === ORDER_JOBS.invoicePdf) {
+    const id = String((job.data as { invoiceId?: unknown }).invoiceId ?? "");
+    if (!/^[a-f0-9]{24}$/.test(id)) throw new UnrecoverableError("invoice-pdf job without an invoice id");
+    const res = await ensureInvoicePdf(id);
+    if (!res) throw new UnrecoverableError(`Invoice ${id} not found`);
+    return { invoiceNo: res.invoiceNo, bytes: res.pdf.length };
+  }
   if (job.name !== RELEASE_JOB) throw new UnrecoverableError(`Unknown orders job: ${job.name}`);
   const res = await releaseExpiredReservations();
   if (res.orderNos.length > 0) {

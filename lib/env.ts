@@ -48,6 +48,12 @@ const schema = z
     SMS_SENDER_ID: optional,
     ALPHA_SMS_API_KEY: optional,
 
+    /**
+     * Chrome/Chromium for invoice PDFs (FR-OR-03): the full path to its executable, e.g.
+     * /usr/bin/chromium in the production image. Unset = the Google Chrome installed on this computer.
+     */
+    CHROMIUM_PATH: optional,
+
     CLOUDINARY_CLOUD_NAME: optional,
     CLOUDINARY_API_KEY: optional,
     CLOUDINARY_API_SECRET: optional,

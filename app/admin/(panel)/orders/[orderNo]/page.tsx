@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { CallLog, Notes } from "@/components/admin/orders/calls-and-notes";
 import { dhakaTime, PaymentBadge, RiskBadge, showPhone, StatusBadge, telHref } from "@/components/admin/orders/bits";
+import { InvoiceCard } from "@/components/admin/orders/invoice-card";
 import { OrderActions } from "@/components/admin/orders/order-actions";
 import { RefundButton } from "@/components/admin/orders/refund";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import { formatTaka } from "@/lib/money";
 import { requireStaff } from "@/modules/auth/session";
 import { PAYMENT_METHOD_NAMES } from "@/modules/checkout/checkout";
 import { BLOCK_KIND_NAMES } from "@/modules/customers/blocks";
+import { adminInvoice } from "@/modules/invoices/data";
 import { getAdminOrder, phoneSummary, requestTime } from "@/modules/orders/admin-data";
 import { canRefund, moneyIn } from "@/modules/orders/lifecycle";
 import { isOrderNo, ORDER_STATUS_NAMES, PAYMENT_STATUS_NAMES, type OrderStatus } from "@/modules/orders/orders";
@@ -44,8 +46,11 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
   if (!isOrderNo(orderNo)) notFound();
   const order = await getAdminOrder(orderNo);
   if (!order) notFound();
-  const others = await phoneSummary(order.customer.phone, order.orderNo);
   const now = await requestTime();
+  const [others, invoice] = await Promise.all([
+    phoneSummary(order.customer.phone, order.orderNo),
+    adminInvoice(order.id, now),
+  ]);
   const mayUpdate = permissions.has("orders.update");
   const a = order.advance;
   const history = [
@@ -333,6 +338,16 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
               )}
             </CardContent>
           </Card>
+
+          {invoice && (
+            <InvoiceCard
+              orderNo={order.orderNo}
+              invoice={invoice}
+              issued={dhakaTime(invoice.issuedAt, now)}
+              expires={dhakaTime(invoice.expiresAt, now)}
+              canWrite={mayUpdate}
+            />
+          )}
 
           <Card>
             <CardHeader>
