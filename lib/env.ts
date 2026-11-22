@@ -15,6 +15,11 @@ const schema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     APP_URL: z.url().default("http://localhost:3000"),
     STORE_NAME: z.string().min(1).default("China Import Store"),
+    /**
+     * Whether search engines may index the shop (robots.txt and meta robots, NFR-UX-01). Unset = yes
+     * when APP_URL is https, no on plain http. Set "off" on staging so it never shows up in Google.
+     */
+    SEARCH_INDEXING: z.enum(["on", "off"]).optional(),
 
     MONGODB_URI: z.string().min(1),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),

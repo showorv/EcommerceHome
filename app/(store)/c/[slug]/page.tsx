@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { getCategoryPage, getListingSlugs } from "@/modules/catalog/listing-data";
 import { SLUG_RE } from "@/modules/catalog/logic";
 import { breadcrumbJsonLd, jsonLdString } from "@/modules/catalog/seo";
+import { shareMeta } from "@/modules/seo/site";
 
 /**
  * Category page (FR-SF-07): products in the category and all its sub-categories, with filters,
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Prom
     title,
     description,
     alternates: { canonical: `/c/${c.slug}` },
-    openGraph: { title, description, url: `/c/${c.slug}`, ...(image ? { images: [{ url: image }] } : {}) },
+    ...shareMeta({ siteName: env().STORE_NAME, title, description, path: `/c/${c.slug}`, image }),
   };
 }
 

@@ -6,6 +6,7 @@ import { ProductDetail } from "@/components/store/product-detail";
 import { env } from "@/lib/env";
 import { SLUG_RE } from "@/modules/catalog/logic";
 import { breadcrumbJsonLd, jsonLdString, productJsonLd, productMetaDescription } from "@/modules/catalog/seo";
+import { shareMeta } from "@/modules/seo/site";
 import { getPrebuildSlugs, getProductDetail } from "@/modules/catalog/storefront";
 
 /**
@@ -39,13 +40,7 @@ export async function generateMetadata({ params }: PageProps<"/p/[slug]">): Prom
     title,
     description,
     alternates: { canonical: `/p/${p.slug}` },
-    openGraph: {
-      title,
-      description,
-      url: `/p/${p.slug}`,
-      ...(image ? { images: [{ url: image, alt: p.title.en }] } : {}),
-    },
-    twitter: { card: image ? "summary_large_image" : "summary", title, description },
+    ...shareMeta({ siteName: env().STORE_NAME, title, description, path: `/p/${p.slug}`, image, imageAlt: p.title.en }),
   };
 }
 

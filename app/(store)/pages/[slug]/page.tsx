@@ -7,6 +7,7 @@ import { breadcrumbJsonLd, jsonLdString } from "@/modules/catalog/seo";
 import { plainText } from "@/modules/cms/blocks";
 import { getLivePage, getLivePageList } from "@/modules/cms/pages";
 import { getLiveDesign } from "@/modules/storefront/design-data";
+import { shareMeta } from "@/modules/seo/site";
 
 /**
  * CMS pages: About, Privacy, Terms, Returns, Shipping, FAQ, Contact and custom pages (FR-SF-09).
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: PageProps<"/pages/[slug]">): 
     title,
     description,
     alternates: { canonical: `/pages/${page.slug}` },
-    openGraph: { title, description, url: `/pages/${page.slug}`, type: "website" },
+    ...shareMeta({ siteName: env().STORE_NAME, title, description, path: `/pages/${page.slug}`, type: "article" }),
   };
 }
 

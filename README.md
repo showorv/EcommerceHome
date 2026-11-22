@@ -130,7 +130,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [ ] 3.1 Security review: headers scan (grade A), OWASP ZAP baseline, dependency scan clean
 - [x] 3.2 Load test with k6: 500 concurrent users, 20 orders/min for 10 min
 - [x] 3.3 Core Web Vitals pass on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1)
-- [ ] 3.4 SEO: sitemap, robots, structured data, OG images (NFR-UX-01)
+- [x] 3.4 SEO: sitemap, robots, structured data, OG images (NFR-UX-01)
 - [ ] 3.5 Analytics: Meta Pixel + Conversions API, GA4, TikTok (FR-AD-13)
 - [ ] 3.6 Production deploy: VPS + Docker Compose behind Cloudflare, Sentry, uptime alerts, logs (NFR-AV-*)
 - [ ] 3.7 Backups (daily, 30 days) + restore test on staging (NFR-SEC-19)
@@ -302,6 +302,32 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Phase 3.4 — SEO: sitemap, robots, structured data, share images
+
+- Already in place from earlier steps: server-rendered pages, clean addresses (`/p/…`, `/c/…`), a
+  canonical link on every public page, and Product + Breadcrumb data on product and category pages.
+- **`/sitemap.xml`:** home, categories, collections, products (with their first picture) and CMS
+  pages, with last-changed dates. It refreshes when products, categories or pages are saved.
+- **`/robots.txt`:** search engines may read the shop but not admin, API, account, cart, checkout,
+  order tracking, previews, invoice links or search results; it points to the sitemap.
+  - **Staging and local copies stay out of Google:** when `APP_URL` is plain http, or
+    `SEARCH_INDEXING=off` is set, robots.txt says "no" to everything and every page carries
+    `noindex`. The live shop on https is indexed without setting anything. These are fixed when the
+    shop is built, so set `APP_URL` (and `SEARCH_INDEXING=off` on staging) before `pnpm build`.
+- **Organization and WebSite data on the home page:** the shop's name, logo, phone, email and social
+  pages (from Admin → Storefront → Design), plus the search box Google can show under the result.
+- **Share previews (Facebook, WhatsApp, Messenger):** every page now has a complete set of tags
+  (site name, title, description, picture). Products and categories share their own picture; other
+  pages share a new default picture (`/share-image`: the store name on the brand colour).
+- Checked on the production build: sitemap, robots.txt, the share picture, and the tags and
+  structured data on the home, product and category pages.
+- 6 new tests (342 total); lint, types, formatting and the production build pass.
+- **For 3.8:** after launch, add the sitemap in Google Search Console and check the product pages
+  with Google's Rich Results Test.
+- Not committed yet.
+
+**Next:** Phase 3.5 — Analytics: Meta Pixel + Conversions API, GA4, TikTok.
+
 ### 2026-11-23 · Phase 3.3 — Core Web Vitals on mobile
 
 - **Result: passed.** Measured on the production build in Chrome, under the conditions Lighthouse's
@@ -331,7 +357,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **To check again:** `pnpm build && pnpm start`, then `pnpm perf:vitals` (uses the installed Google
   Chrome; `--runs 5` for more loads, or pass another address, e.g. staging after 3.6).
 - Checked the product page and cart drawer in the browser: no errors.
-- Not committed yet.
+- Committed and pushed (6aef7ad).
 
 **Next:** Phase 3.4 — SEO: sitemap, robots, structured data, OG images.
 
