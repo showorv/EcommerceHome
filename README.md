@@ -129,7 +129,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 
 - [ ] 3.1 Security review: headers scan (grade A), OWASP ZAP baseline, dependency scan clean
 - [x] 3.2 Load test with k6: 500 concurrent users, 20 orders/min for 10 min
-- [ ] 3.3 Core Web Vitals pass on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1)
+- [x] 3.3 Core Web Vitals pass on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1)
 - [ ] 3.4 SEO: sitemap, robots, structured data, OG images (NFR-UX-01)
 - [ ] 3.5 Analytics: Meta Pixel + Conversions API, GA4, TikTok (FR-AD-13)
 - [ ] 3.6 Production deploy: VPS + Docker Compose behind Cloudflare, Sentry, uptime alerts, logs (NFR-AV-*)
@@ -302,6 +302,39 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Phase 3.3 — Core Web Vitals on mobile
+
+- **Result: passed.** Measured on the production build in Chrome, under the conditions Lighthouse's
+  mobile test uses: a phone screen, slow 4G (150 ms, 1.6 Mbit/s) and a 4× slower CPU, with an empty
+  cache. Median of 3 loads:
+
+  | Page                 | LCP    | CLS   | Target      |
+  | -------------------- | ------ | ----- | ----------- |
+  | Home                 | 1.38 s | 0     | LCP ≤ 2.5 s |
+  | Category             | 1.42 s | 0     | CLS ≤ 0.1   |
+  | Product              | 1.42 s | 0     |             |
+  | Search (information) | 1.43 s | 0     |             |
+  | Cart (information)   | 2.76 s | 0.002 |             |
+
+  CLS includes scrolling down the page and back. INP needs real taps; it shows up in field data
+  once the shop is live (3.5 analytics).
+
+- **Less JavaScript on every shopper page (NFR-PF-02):** the header's cart and menu code pulled in the
+  form-validation library (zod) on every page. Moved the few helpers they need into zod-free files
+  (`modules/cart/view.ts`, `modules/storefront/design-links.ts`). Home, category, product and cart
+  pages now load about 31 KB less (compressed); only checkout and account pages, which check forms,
+  still load it.
+- **Cart page:** its main text appears once the cart has loaded in the browser, so its LCP is later
+  (2.8 s on slow 4G). The SRS target covers home, category and product pages only; left as is.
+- **Left for later:** the animation library (motion, about 49 KB) still loads on pages with product
+  cards. Swapping card effects to plain CSS would save that; not needed for the targets.
+- **To check again:** `pnpm build && pnpm start`, then `pnpm perf:vitals` (uses the installed Google
+  Chrome; `--runs 5` for more loads, or pass another address, e.g. staging after 3.6).
+- Checked the product page and cart drawer in the browser: no errors.
+- Not committed yet.
+
+**Next:** Phase 3.4 — SEO: sitemap, robots, structured data, OG images.
+
 ### 2026-11-23 · Phase 3.2 — Load test with k6
 
 - **Result: passed.** 500 shoppers browsing at once for 10 minutes, plus 20 orders a minute, on the
@@ -329,7 +362,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **For 3.6:** the shop reads the visitor's IP from `X-Forwarded-For` unless `CLIENT_IP_HEADER` says
   otherwise. Behind Cloudflare, set `CLIENT_IP_HEADER=cf-connecting-ip`, so per-IP limits can't be
   dodged with a made-up header (the load test relies on exactly that to give each shopper an IP).
-- Not committed yet.
+- Committed and pushed (0c1b9f4).
 
 **Next:** Phase 3.3 — Core Web Vitals on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1).
 

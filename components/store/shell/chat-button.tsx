@@ -3,7 +3,8 @@
 import { MessageCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
-import { chatLinks, type Chat } from "@/modules/storefront/design";
+import type { Chat } from "@/modules/storefront/design";
+import { chatLinks } from "@/modules/storefront/design-links";
 import { SocialIcon } from "./social-icons";
 
 /**

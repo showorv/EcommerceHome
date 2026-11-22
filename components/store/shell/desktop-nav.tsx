@@ -6,7 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { isMega, type MenuItem } from "@/modules/storefront/design";
+import type { MenuItem } from "@/modules/storefront/design";
+import { isMega } from "@/modules/storefront/design-links";
 
 /**
  * Header menu on tablets and computers (FR-SF-02). Items with columns open a dropdown, or a full-width

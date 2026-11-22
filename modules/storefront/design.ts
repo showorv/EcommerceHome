@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { hrefField, imageField, whenField } from "./sections";
 
+// Helpers the storefront's browser code uses live in design-links.ts, so pages don't ship zod.
+export { chatLinks, isMega } from "./design-links";
+
 /**
  * Store design settings (FR-SF-02, FR-SF-03, FR-SF-04): header menu with mega-menus, footer,
  * announcement bar, social links and theme tokens. Pure and browser-safe: the admin editor and the
@@ -84,7 +87,6 @@ export type MenuItem = Navigation["header"][number];
 export type MenuLink = z.infer<typeof link>;
 
 /** A top item opens a mega-menu when any column has links; plain dropdown when it only has columns. */
-export const isMega = (item: MenuItem) => item.children.some((c) => c.children.length > 0);
 
 // ---------- Chat button (FR-SF-10) ----------
 
@@ -148,19 +150,7 @@ export type Chat = z.infer<typeof chatSchema>;
 /** Shown when the button is on and has somewhere to go. */
 export const chatLive = (c: Chat) => c.enabled && Boolean(c.whatsapp || c.messenger);
 
-/** Where each chat option goes. `pageUrl` is added to the WhatsApp message when pageLink is on. */
-export function chatLinks(c: Chat, pageUrl?: string): { whatsapp: string | null; messenger: string | null } {
-  let whatsapp: string | null = null;
-  if (c.whatsapp) {
-    const message = [c.greeting, c.pageLink ? pageUrl : ""].filter(Boolean).join("\n");
-    whatsapp = `https://wa.me/${c.whatsapp}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
-  }
-  return { whatsapp, messenger: c.messenger ? `https://m.me/${encodeURIComponent(c.messenger)}` : null };
-}
-
-// ---------- Theme ----------
-
-/** Fonts the store can use. Each is bundled at build time; the theme only picks one. */
+/** Where each chat option goes. `pageUrl` is added to the WhatsApp message when pageLink isthe theme only picks one. */
 export const FONTS = {
   jakarta: "Plus Jakarta Sans",
   inter: "Inter",

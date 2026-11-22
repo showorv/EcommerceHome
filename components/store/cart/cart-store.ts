@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { reorderAction } from "@/modules/account/actions";
 import { addToCartAction, loadCartAction, setCartQtyAction, type CartResult } from "@/modules/cart/actions";
-import { EMPTY_CART, type CartView } from "@/modules/cart/logic";
+import { EMPTY_CART, type CartView } from "@/modules/cart/view";
 
 /**
  * The cart in the browser (FR-CO-01): one small store shared by the header badge, the drawer, the cart

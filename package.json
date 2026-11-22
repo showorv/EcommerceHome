@@ -21,6 +21,7 @@
     "load:prepare": "tsx --conditions=react-server scripts/load/prepare.ts",
     "load:run": "k6 run scripts/load/storefront.js",
     "load:cleanup": "tsx --conditions=react-server scripts/load/cleanup.ts",
+    "perf:vitals": "tsx scripts/perf/vitals.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

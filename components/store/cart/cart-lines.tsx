@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatTaka } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { freeDeliveryGap, type CartLine, type CartView } from "@/modules/cart/logic";
+import { freeDeliveryGap, type CartLine, type CartView } from "@/modules/cart/view";
 import { setLineQty } from "./cart-store";
 
 const PROBLEM: Record<NonNullable<CartLine["problem"]>, (l: CartLine) => string> = {
