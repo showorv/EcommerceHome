@@ -1,5 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { tryWriteAudit } from "@/modules/audit/audit";
 import { storageSettings } from "@/modules/integrations/store";
@@ -10,6 +12,9 @@ import { checkUpload, uploadRequestSchema } from "@/modules/media/upload-policy"
  * The browser uploads directly to Cloudinary with these parameters.
  */
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request.headers, env().APP_URL)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const guard = await checkStaff("media.upload");
   if (!guard.ok) return NextResponse.json({ error: "Forbidden" }, { status: guard.status });
 

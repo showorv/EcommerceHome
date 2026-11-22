@@ -302,6 +302,36 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Phase 3.1 — Security review (headers and dependencies; ZAP still to run)
+
+- **Security headers**, checked on the production build (storefront, product, cart, account, admin,
+  API and 404 pages): Content-Security-Policy, X-Content-Type-Options, Referrer-Policy,
+  X-Frame-Options (DENY; SAMEORIGIN only on `/preview`), Permissions-Policy and
+  Cross-Origin-Opener-Policy are on every page. No `X-Powered-By` or `Server` header.
+  - HSTS and `upgrade-insecure-requests` turn on by themselves once `APP_URL` is https; on the local
+    http server they are rightly absent. Run the securityheaders.com grade-A check on the real domain
+    after 3.6 (Cloudflare).
+  - The storefront CSP still allows inline scripts: cached (ISR) pages can't carry a per-request
+    nonce. Admin pages use a nonce with `strict-dynamic`.
+  - Account pages are `no-store`; cart and checkout are cached shells that load the cart in the
+    browser, so no one's data is cached.
+- **CSRF fix:** the two staff upload routes (`/api/media/sign` and the dev-only local upload) now
+  refuse requests that don't come from our own site (`lib/same-origin.ts`, using the browser's
+  `Sec-Fetch-Site`, then `Origin`). Checked with curl: cross-site, foreign Origin and header-less
+  posts get 403; same-site posts reach the sign-in check. Server actions and Better Auth already had
+  their own origin checks; the revalidate route uses a secret.
+- **Dependencies:** `pnpm audit --prod` finds nothing. The full audit finds one moderate issue in
+  `minimatch`, pulled in by `shadcn` (a dev-only tool; only its CSS file ends up in the build), so it
+  doesn't reach the shop. CI already fails on critical production issues.
+- **Left for later:** the search-suggest and listing APIs have no rate limit of their own (they are
+  served from cache); Cloudflare rate limits in 3.6 cover them.
+- **Skipped for now:** the OWASP ZAP baseline scan (it needs the ZAP Docker image, about 1.5 GB).
+  3.1 stays unticked until it runs; best done against the real domain after 3.6.
+- 3 new tests (336 total); lint, types, formatting and the production build pass.
+- Not committed yet.
+
+**Next:** Phase 3.2 — load test with k6 (the ZAP scan from 3.1 still to run later).
+
 ### 2026-11-22 · Phase 2.17 — Manual orders from Facebook and WhatsApp
 
 - **Orders → New order** (Open question 9), for staff and up (new permission _orders.create_). For
@@ -329,7 +359,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - 10 new tests (333 total); lint, types, formatting and the production build pass.
 - **Phase 2 is finished**, apart from 2.13 (Steadfast), which waits for your merchant account. The
   SRS §9.1 acceptance run is part of 3.8.
-- Not committed yet.
+- Committed and pushed (61d1b21).
 
 **Next:** Phase 3.1 — Security review: headers scan, OWASP ZAP baseline, dependency scan.
 
