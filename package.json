@@ -18,6 +18,9 @@
     "services:down": "docker compose down",
     "owner:create": "tsx scripts/create-owner.ts",
     "catalog:resync": "tsx --conditions=react-server scripts/resync-catalog.ts",
+    "load:prepare": "tsx --conditions=react-server scripts/load/prepare.ts",
+    "load:run": "k6 run scripts/load/storefront.js",
+    "load:cleanup": "tsx --conditions=react-server scripts/load/cleanup.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

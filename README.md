@@ -128,7 +128,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 ### Phase 3 — Hardening + launch (1–2 weeks)
 
 - [ ] 3.1 Security review: headers scan (grade A), OWASP ZAP baseline, dependency scan clean
-- [ ] 3.2 Load test with k6: 500 concurrent users, 20 orders/min for 10 min
+- [x] 3.2 Load test with k6: 500 concurrent users, 20 orders/min for 10 min
 - [ ] 3.3 Core Web Vitals pass on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1)
 - [ ] 3.4 SEO: sitemap, robots, structured data, OG images (NFR-UX-01)
 - [ ] 3.5 Analytics: Meta Pixel + Conversions API, GA4, TikTok (FR-AD-13)
@@ -302,6 +302,37 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Phase 3.2 — Load test with k6
+
+- **Result: passed.** 500 shoppers browsing at once for 10 minutes, plus 20 orders a minute, on the
+  production build (`pnpm build && pnpm start`) on this Mac:
+
+  | What                                                    | p95                   | Target (NFR-PF-04) |
+  | ------------------------------------------------------- | --------------------- | ------------------ |
+  | Catalogue reads (home, category, product, search, cart) | 11 ms                 | ≤ 300 ms           |
+  | Order placement (add to cart + place order)             | 48 ms                 | ≤ 800 ms           |
+  | Errors                                                  | 0 of 153,675 requests | 0                  |
+
+  200 orders placed (plus 5 in a smoke run), each with its own number and no gaps; exactly 205 units
+  held, so nothing was oversold.
+
+- **How to run it again** (needs [k6](https://k6.io), installed here with `brew install k6`):
+  `pnpm build && pnpm start`, then `pnpm load:prepare`, `pnpm load:run` (about 12 minutes; add
+  `-e SMOKE=1` after `k6 run` for a 1-minute check) and `pnpm load:cleanup`.
+  - `load:prepare` adds a temporary product with plenty of stock and 600 test numbers that count as
+    confirmed by SMS code (the SMS itself is outside the timing target).
+  - `load:cleanup` removes the test orders, their messages and queued SMS, the guest carts, the
+    order number counter and the product. Checked: the database is back exactly as before.
+  - The scripts refuse to run against an https (live) shop.
+- **Limits of this result:** k6 and the shop ran on the same Mac, with one Node process and the
+  local MongoDB and Redis. Run it once more on the real server (or staging) after 3.6 to confirm.
+- **For 3.6:** the shop reads the visitor's IP from `X-Forwarded-For` unless `CLIENT_IP_HEADER` says
+  otherwise. Behind Cloudflare, set `CLIENT_IP_HEADER=cf-connecting-ip`, so per-IP limits can't be
+  dodged with a made-up header (the load test relies on exactly that to give each shopper an IP).
+- Not committed yet.
+
+**Next:** Phase 3.3 — Core Web Vitals on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1).
+
 ### 2026-11-23 · Phase 3.1 — Security review (headers and dependencies; ZAP still to run)
 
 - **Security headers**, checked on the production build (storefront, product, cart, account, admin,
@@ -328,7 +359,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Skipped for now:** the OWASP ZAP baseline scan (it needs the ZAP Docker image, about 1.5 GB).
   3.1 stays unticked until it runs; best done against the real domain after 3.6.
 - 3 new tests (336 total); lint, types, formatting and the production build pass.
-- Not committed yet.
+- Committed and pushed (2f0fadd).
 
 **Next:** Phase 3.2 — load test with k6 (the ZAP scan from 3.1 still to run later).
 
