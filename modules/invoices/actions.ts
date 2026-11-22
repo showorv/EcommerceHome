@@ -4,13 +4,14 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { enqueueInvoicePdf, enqueueNotification } from "@/lib/queue";
+import { enqueueInvoicePdf } from "@/lib/queue";
 import { writeAudit } from "@/modules/audit/audit";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
+import { notifyOrder } from "@/modules/notifications/send";
 import { Order } from "@/modules/orders/models";
 import { isOrderNo } from "@/modules/orders/orders";
 import { replaceInvoiceLink, revokeInvoiceLink, saveInvoiceSettings } from "./data";
-import { invoiceLinkSms, invoiceSettingsInput, invoiceUrl } from "./invoices";
+import { invoiceSettingsInput, invoiceUrl } from "./invoices";
 
 /** Invoice links (FR-OR-04) and settings: permission → zod → change → audit → refresh. */
 
@@ -25,8 +26,16 @@ const orderNoInput = z.string().refine(isOrderNo, "Unknown order");
 const newLinkInput = z.object({ orderNo: orderNoInput, sendSms: z.boolean().default(false) });
 const revokeInput = z.object({ orderNo: orderNoInput });
 
+type OrderBits = {
+  _id: unknown;
+  orderNo: string;
+  customer: { name: string; phone: string; email?: string };
+  total: number;
+  codAmount: number;
+};
+
 async function orderFor(orderNo: string) {
-  return Order.findOne({ orderNo }).select("_id customer.phone").lean<{ _id: unknown; customer: { phone: string } }>();
+  return Order.findOne({ orderNo }).select("_id orderNo customer total codAmount").lean<OrderBits>();
 }
 
 /** A new link: the old one stops working at once, and the PDF is printed again for the new QR code. */
@@ -41,28 +50,34 @@ export async function newInvoiceLinkAction(raw: unknown): Promise<InvoiceActionR
     if (!order || !inv) return { ok: false, error: "This order has no invoice yet." };
     const link = invoiceUrl(env().APP_URL, inv.token);
     await enqueueInvoicePdf(inv.id).catch((err) => logger.error({ err }, "invoice PDF job could not be queued"));
-    if (p.data.sendSms) {
-      await enqueueNotification({
-        kind: "sms",
-        to: order.customer.phone,
-        text: invoiceLinkSms(p.data.orderNo, env().STORE_NAME, link),
-        purpose: "invoice_link",
-      });
-    }
+    const sent = p.data.sendSms
+      ? await notifyOrder(
+          "invoice_link",
+          {
+            id: String(order._id),
+            orderNo: order.orderNo,
+            customer: order.customer,
+            total: order.total,
+            codAmount: order.codAmount,
+          },
+          { id: inv.id, invoiceNo: inv.invoiceNo, link },
+        )
+      : [];
     await writeAudit({
       actor: { id: g.ctx.user.id, email: g.ctx.user.email },
       action: "invoice.new_link",
       entity: "invoice",
       entityId: inv.id,
-      after: { orderNo: p.data.orderNo, invoiceNo: inv.invoiceNo, smsSent: p.data.sendSms },
+      after: { orderNo: p.data.orderNo, invoiceNo: inv.invoiceNo, sentBy: sent },
       ...(await requestMeta()),
     });
     refresh();
     return {
       ok: true,
-      message: p.data.sendSms
-        ? `New link made for ${inv.invoiceNo} and sent to the customer. The old link no longer works.`
-        : `New link made for ${inv.invoiceNo}. The old link no longer works.`,
+      message:
+        sent.length > 0
+          ? `New link made for ${inv.invoiceNo} and sent to the customer by ${sent.map((c) => (c === "sms" ? "SMS" : "email")).join(" and ")}. The old link no longer works.`
+          : `New link made for ${inv.invoiceNo}. The old link no longer works.`,
     };
   } catch (err) {
     logger.error({ err }, "new invoice link failed");

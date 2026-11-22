@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { ProductView } from "@/modules/catalog/storefront";
 import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LabelChips, PriceLine, QuantityStepper, Rating, StockLine, useVariantChoice } from "./buy-parts";
+import { WishlistButton } from "./wishlist-button";
 import { MediaGallery } from "./media-gallery";
 import { VariantOptions } from "./variant-options";
 
@@ -84,7 +85,10 @@ export function ProductDetail({ product }: { product: ProductView }) {
         <div className="flex flex-col gap-5">
           <LabelChips labels={product.labels} />
           <div className="grid gap-1">
-            <h1 className="text-2xl leading-tight font-extrabold tracking-tight md:text-3xl">{title}</h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl leading-tight font-extrabold tracking-tight md:text-3xl">{title}</h1>
+              <WishlistButton productId={product.id} title={title} variant="inline" />
+            </div>
             {product.title.bn && (
               <p lang="bn" className="text-muted-foreground text-lg">
                 {product.title.bn}

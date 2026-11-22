@@ -246,6 +246,49 @@ export async function addToCart(
   return { cart: await view(items, signedIn), message };
 }
 
+/**
+ * Adds several lines at once ("Order again", FR-AC-06), each up to what's in stock. Lines that can't be
+ * bought any more are left out and named in `skipped`.
+ */
+export async function addLinesToCart(
+  lines: { variantId: string; qty: number; name: string }[],
+): Promise<CartChange & { added: number; skipped: string[] }> {
+  await connectMongoose();
+  const facts = await variantFacts([...new Set(lines.map((l) => l.variantId))]);
+  const skipped: string[] = [];
+  const wanted = new Map<string, number>();
+  for (const l of lines) {
+    const f = facts.get(l.variantId);
+    if (!f || !f.sellable) skipped.push(`${l.name} (no longer sold)`);
+    else if (f.available <= 0) skipped.push(`${l.name} (sold out)`);
+    else wanted.set(l.variantId, (wanted.get(l.variantId) ?? 0) + l.qty);
+  }
+  const w = await who();
+  const signedIn = w.userId !== null;
+  if (wanted.size === 0) {
+    const cart = await currentCart(w, false);
+    return { cart: await view(cart?.items ?? [], signedIn), added: 0, skipped };
+  }
+  const cart = await currentCart(w, true);
+  if (!cart) throw new CartError("Please try again.");
+  let added = 0;
+  const items = await writeItems(cart.id, signedIn, (cur) => {
+    added = 0;
+    let next = cur;
+    for (const [variantId, qty] of wanted) {
+      const f = facts.get(variantId)!;
+      const have = next.find((i) => i.variantId === variantId)?.qty ?? 0;
+      const add = Math.max(0, Math.min(qty, Math.min(MAX_QTY, f.available) - have));
+      if (add === 0) continue;
+      if (have === 0 && next.length >= MAX_LINES) break;
+      next = addItem(next, variantId, add);
+      added += add;
+    }
+    return next;
+  });
+  return { cart: await view(items, signedIn), added, skipped };
+}
+
 /** Sets a line's quantity (0 removes it), never above what's in stock. */
 export async function setCartQty(variantId: string, qty: number): Promise<CartChange> {
   await connectMongoose();

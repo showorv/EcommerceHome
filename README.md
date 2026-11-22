@@ -116,9 +116,9 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
 - [x] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
 - [x] 2.11 Invoice: sequential number, PDF with Bangla font, signed token link with expiry/revoke (FR-OR-03…05)
-- [ ] 2.12 Email adapter (Resend/SES/Brevo) + React Email templates; editable SMS/email templates; notification log with retry (FR-OR-06/07)
-- [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4)
-- [ ] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
+- [x] 2.12 Email adapter (Resend/SES/Brevo) + React Email templates; editable SMS/email templates; notification log with retry (FR-OR-06/07)
+- [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4) — _on hold until you have a Steadfast merchant account; built after that_
+- [x] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
 - [ ] 2.15 Customers admin + dashboard (FR-AD-01, FR-AD-06)
 - [ ] 2.16 Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13)
 - [ ] 2.17 Manual order form for Facebook/WhatsApp orders (Open question 9)
@@ -301,6 +301,125 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-22 · Phase 2.14 — Customer account area and order tracking
+
+- **My account** (FR-AC-06), with tabs Overview · Orders · Addresses · Wishlist · Profile (a scrolling
+  row on phones). Signed-out visitors go to sign-in and come back to the page they wanted.
+- **Orders:** the list, and a page per order:
+  - progress steps (placed → confirmed → packed → on the way → delivered; a cancelled or returned
+    order stops where it got to) and the history with times in Dhaka time
+  - items, totals, payment and what's left to pay at the door
+  - **Order again** puts the same items back in the cart (only what is still on sale)
+  - **Invoice PDF** once the order is confirmed: private to the customer, never cached
+  - staff notes, call logs, costs and risk are never shown
+- **Which orders are "mine":** orders placed while signed in, plus orders placed **without signing
+  in** with the account's mobile number, once that number is confirmed with a code.
+- **Addresses:** up to 10, with a default. Checkout has a "Saved addresses" picker, fills the default
+  in, and offers "Save this address to my account" (on by default for the first one).
+- **Wishlist:** a heart on product cards, the product page and quick view. Guests get "Sign in to save
+  products". Products the shop stopped selling are listed so they can be removed.
+- **Profile:** change the name, password (and sign out other devices), sign out of all other
+  devices, and **add or change the mobile number with an SMS code**.
+  - **Delete account:** needs the password (or, for Google-only accounts, a sign-in within the last
+    day). Addresses, wishlist and cart are deleted and every device is signed out. Orders stay for
+    deliveries, returns and accounts, but are no longer linked to the person. Staff accounts can't
+    delete themselves here. Audit log entry: `account.delete`.
+- **Track your order** at `/track` (FR-AC-07), linked in the header, the mobile menu and the thank-you
+  page: order number + the mobile number used.
+  - It shows progress, items and money, and only the area and district: no name, phone or street.
+  - Wrong details get one message for every case, and lookups are limited (20 per 10 minutes per
+    visitor, 8 per hour per order), so numbers can't be guessed.
+- **Signing out now also forgets the checkout form** in that browser (name, phone, address), so the
+  next person on a shared phone starts blank.
+- **Checked in the browser** with a test customer, on a phone-sized screen too: sign-up, adding the
+  mobile number with a code (a wrong code is refused), an order signed in (address saved) and one as
+  a guest with the same number (both listed), tracking with a wrong and the right number, the invoice
+  PDF (refused when signed out), Order again, addresses (errors, default, picker at checkout),
+  wishlist (incl. a removed product), name change, and deleting the account (wrong password refused).
+- **Fixed while testing:**
+  - nothing let a customer add a confirmed mobile number, so guest orders could never show up
+  - the checkout form kept the last customer's details after sign-out
+  - "Track this order" now fills in the order number
+  - the saved-address picker showed an empty first choice
+  - "not confirmed yet" broke in the middle of a word on phones
+- **Cleanup:** removed the test customer, 2 orders, invoice, order and invoice counters, 7 message
+  log rows and queue jobs, 1 stock movement, 1 audit entry and the rate-limit keys. Nothing was
+  emailed (no worker ran). The chopper is back exactly as before.
+- 15 new tests (303 total); lint, types, formatting and the production build pass.
+- **Good to know:**
+  - Changing the **email** address isn't available yet ("please contact us").
+  - Docker Desktop had stopped during this step; I started it and this project's containers again.
+    The admin page in the app's browser now asks you to sign in again.
+- Not committed yet (2.12 isn't either).
+
+**Next:** Phase 2.15 — Customers admin + dashboard (FR-AD-01, FR-AD-06).
+
+### 2026-11-22 · Phase 2.12 — Email, message texts and the message log
+
+- **Email providers** (SRS §8.3): `EMAIL_PROVIDER=smtp` (default) or `resend` with
+  `RESEND_API_KEY` (see `.env.example`).
+  - Amazon SES and Brevo both give SMTP settings, so they work through `smtp`.
+  - Errors that retrying can't fix (bad key, bad address, SMTP 5xx) stop at once. Everything else is
+    retried.
+- **Emails look like the shop** (React Email): shop name on top, the text in paragraphs, clickable
+  links, and the shop's phone and address at the bottom (taken from Admin → Invoices).
+  - The confirmation email has the invoice PDF attached and a "View invoice" button.
+  - The sign-in, reset and verify emails now have a button too.
+- **Customers get a message at each step**, by SMS and, if they gave an email, by email:
+  - order received, confirmed (with the invoice link), shipped, delivered, cancelled, returned, and
+    new invoice link
+  - cancelled and returned are email only by default, to save SMS cost
+  - packed sends nothing
+- **Admin → Notifications → Message texts** (FR-OR-06, `settings.manage`):
+  - pick the language customers get: English or বাংলা
+  - edit every SMS and email in both languages, with a live preview and an SMS counter (segments and
+    plain or Unicode)
+  - turn SMS or email on and off per step
+  - placeholders such as `{order_no}`, `{total}` and `{invoice_link}`; one that doesn't belong to a
+    step is refused, on screen and on the server
+  - "Default text" brings back the original wording
+  - English SMS write money as "Tk 1,450", so they stay at 160 characters a segment. Bangla SMS hold
+    70, so they cost 2–3 times as much.
+- **Admin → Notifications** (FR-OR-07, `orders.view`): every SMS and email with its status (waiting,
+  sent, failed), the error, the number of tries, and search by phone, email or order number.
+  - A failed send is tried 5 more times over about a minute and a half, then marked failed.
+  - **Send again** works on sent and failed messages. The order page has a **Messages** card with the
+    same list.
+  - Codes and sign-in links are logged without their text, and can't be sent again.
+  - Log rows are kept for a year; rows for codes, for 30 days.
+  - Audit log entries: `notification.resend`, `notifications.templates`, `notifications.language`.
+- **Checked in the browser** with 2 test orders (emails caught by Mailpit, SMS on the console):
+  - received → confirmed (email with INV-2026-000001.pdf, link and button) → packed → shipped
+  - Send again from the log
+  - switched to Bangla, turned on the cancelled SMS and edited it; `{invoice_link}` was refused.
+    Cancelling the second order sent the edited Bangla SMS.
+  - stopped Mailpit: the email was retried 5 times, then failed with "connect ECONNREFUSED"; after
+    Mailpit came back, Send again delivered it
+  - both pages and the Messages card fit a phone screen
+- **Fixed while testing:**
+  - A refused connection was logged as just "SMTP:" with no reason.
+  - A failed resend still showed the old "Sent" time.
+  - Long links made the Message texts page and the Messages card wider than a phone.
+- **Cleanup:** removed the test orders, invoice, invoice counter, 8 log rows, the saved message texts
+  and language (none existed before), 1 stock movement, 9 audit entries, the queue jobs, Mailpit's
+  test emails and the rate-limit key. The chopper is back exactly as before.
+- 13 new tests (288 total); lint, types, formatting and the production build pass.
+- **Good to know:**
+  - **Your `.env.local` sends email through Gmail**, so local tests send real emails. One test
+    email went out that way, to `rahim.test@example.com`. example.com accepts no mail, so it reached
+    no one; Gmail may show you a bounce notice.
+    For local work, set `SMTP_HOST=localhost`, `SMTP_PORT=1025` and empty `SMTP_USER`/`SMTP_PASS`
+    (Mailpit, http://localhost:8025).
+  - "Sent" means the provider accepted the message. Delivery reports from the SMS gateway and email
+    provider aren't read yet.
+  - The sign-in code text isn't editable; it stays short and fixed.
+  - The two old workers from 19 Nov are stopped. **No worker is running now:** start
+    `npm run worker` (after the Mailpit change above) so messages and PDFs go out.
+- Not committed yet.
+
+**Next:** Phase 2.14 — customer account area: addresses, order history, invoice download, re-order,
+wishlist, guest order tracking. (2.13 Steadfast is on hold until you have a merchant account.)
 
 ### 2026-11-22 · Phase 2.11 — Invoices
 

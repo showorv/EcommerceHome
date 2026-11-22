@@ -7,7 +7,6 @@ import {
   formatInvoiceNo,
   invoiceCounter,
   invoiceDate,
-  invoiceLinkSms,
   invoiceSettingsInput,
   invoiceSnapshot,
   invoiceUrl,
@@ -17,7 +16,6 @@ import {
   readInvoiceSettings,
   TOKEN_BYTES,
 } from "@/modules/invoices/invoices";
-import { orderConfirmedSms } from "@/modules/orders/staff";
 
 const settings = readInvoiceSettings({ phone: "01711111111", address: "Dhaka" }, "Shop");
 
@@ -71,15 +69,6 @@ describe("invoice links", () => {
     expect(linkState({ revokedAt: null, tokenExpiresAt: "2026-11-22T00:00:00Z" }, now)).toBe("expired");
     expect(linkState({ revokedAt: "2026-11-21T00:00:00Z", tokenExpiresAt: "2027-01-01T00:00:00Z" }, now)).toBe(
       "revoked",
-    );
-  });
-
-  it("puts the link in the confirmation SMS, or a new link in its own SMS", () => {
-    expect(orderConfirmedSms(order, "Shop", "https://s.bd/i/abc")).toBe(
-      "Shop: Order #SR10234 confirmed. Total ৳970 (COD ৳900). Invoice: https://s.bd/i/abc",
-    );
-    expect(invoiceLinkSms("SR10234", "Shop", "https://s.bd/i/abc")).toBe(
-      "Shop: Your invoice for order #SR10234: https://s.bd/i/abc",
     );
   });
 

@@ -4,10 +4,10 @@ import { trustFilter } from "@/lib/db/trusted-filter";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { maskPhone } from "@/lib/phone";
-import { enqueueNotification } from "@/lib/queue";
 import { rateLimit } from "@/lib/rate-limit";
 import { redis } from "@/lib/redis";
 import { safeEqual } from "@/lib/crypto";
+import { queueMessage } from "@/modules/notifications/send";
 import { hashCode, newCode } from "./codes";
 import { Otp } from "./models";
 import { OTP } from "./rules";
@@ -98,7 +98,7 @@ export async function sendCode(input: {
   }
 
   try {
-    await enqueueNotification({ kind: "sms", purpose: `${purpose}_otp`, to: phone, text: input.text(code) });
+    await queueMessage({ channel: "sms", purpose: `${purpose}_otp`, to: phone, text: input.text(code) });
   } catch (err) {
     await Otp.deleteOne({ phone, purpose });
     logger.error({ err, to: maskPhone(phone), purpose }, "could not queue the code SMS");

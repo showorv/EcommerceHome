@@ -8,9 +8,25 @@ import { bullConnection } from "@/lib/redis";
  */
 export const QUEUE_NAMES = { notifications: "notifications", orders: "orders" } as const;
 
+/**
+ * One SMS or email. `logId` is its row in the message log (modules/notifications), which the worker
+ * updates after each try. Emails are laid out by the worker (React Email); `attachInvoiceId` adds
+ * that invoice's PDF. Queue messages with `queueMessage()` in modules/notifications/send.ts.
+ */
 export type NotificationJob =
-  | { kind: "sms"; to: string; text: string; purpose: string }
-  | { kind: "email"; to: string; subject: string; text: string; html?: string; purpose: string };
+  | { kind: "sms"; to: string; text: string; purpose: string; logId?: string }
+  | {
+      kind: "email";
+      to: string;
+      subject: string;
+      text: string;
+      /** Ready-made HTML (older jobs); otherwise the worker lays the text out. */
+      html?: string;
+      button?: { label: string; url: string } | null;
+      purpose: string;
+      logId?: string;
+      attachInvoiceId?: string | null;
+    };
 
 export const DEFAULT_JOB_OPTIONS = {
   attempts: 5,

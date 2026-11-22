@@ -22,6 +22,8 @@ export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: Permission }
   { prefix: "/admin/delivery", permission: "zones.manage" },
   { prefix: "/admin/payments", permission: "settings.manage" },
   { prefix: "/admin/invoices", permission: "settings.manage" },
+  { prefix: "/admin/notifications", permission: "orders.view" },
+  { prefix: "/admin/notifications/templates", permission: "settings.manage" },
   { prefix: "/admin/order-rules", permission: "settings.manage" },
   { prefix: "/admin/blocked-numbers", permission: "customers.block" },
   { prefix: "/admin/staff", permission: "staff.manage" },

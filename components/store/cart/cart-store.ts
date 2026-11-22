@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { reorderAction } from "@/modules/account/actions";
 import { addToCartAction, loadCartAction, setCartQtyAction, type CartResult } from "@/modules/cart/actions";
 import { EMPTY_CART, type CartView } from "@/modules/cart/logic";
 
@@ -33,8 +34,14 @@ function set(patch: Partial<State>) {
 function subscribe(l: () => void) {
   listeners.add(l);
   start();
-  return () => listeners.delete(l);
+  return () => void listeners.delete(l);
 }
+
+/** For other browser stores that follow the cart's answer (the wishlist loads once it says "signed in"). */
+export function subscribeCart(l: () => void): () => void {
+  return subscribe(l);
+}
+export const cartState = (): State => state;
 
 export function useCart(): State {
   return useSyncExternalStore(
@@ -165,4 +172,32 @@ export async function setLineQty(variantId: string, qty: number) {
   const res = await run(variantId, () => setCartQtyAction({ variantId, qty }));
   if (!res.ok) set({ cart: before });
   else if (res.message) toast.info(res.message);
+}
+
+/**
+ * "Order again" (FR-AC-06): puts a past order's products back in the cart, as many as are in stock, and
+ * says which ones can't be ordered any more.
+ */
+export async function reorder(orderNo: string): Promise<boolean> {
+  set({ busy: [...state.busy, "add"] });
+  try {
+    const res = await reorderAction({ orderNo }).catch(
+      () => ({ ok: false, error: "Couldn't reach the store. Check your connection." }) as const,
+    );
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    apply(res.cart);
+    if (res.added > 0) {
+      set({ open: true });
+      if (res.skipped.length > 0) toast.info(`Not added: ${res.skipped.join(", ")}.`);
+      return true;
+    }
+    if (res.skipped.length > 0) toast.error(`These can't be ordered now: ${res.skipped.join(", ")}.`);
+    else toast.info("You already have the most we can sell of these in your cart.");
+    return false;
+  } finally {
+    set({ busy: state.busy.filter((b) => b !== "add") });
+  }
 }

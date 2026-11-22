@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { normalizeBdPhone } from "@/lib/phone";
 import { rateLimit } from "@/lib/rate-limit";
 import { redis } from "@/lib/redis";
+import { saveCheckoutAddress } from "@/modules/account/data";
 import { getSession, requestMeta } from "@/modules/auth/session";
 import { cartOwnerKey, currentCartId, loadCart } from "@/modules/cart/data";
 import type { CartView } from "@/modules/cart/logic";
@@ -48,7 +49,7 @@ export type CheckoutResult =
  */
 export async function submitCheckoutAction(
   raw: unknown,
-  meta: { key?: unknown; expectedTotal?: unknown } = {},
+  meta: { key?: unknown; expectedTotal?: unknown; saveAddress?: unknown } = {},
 ): Promise<CheckoutResult> {
   try {
     const { ip, userAgent } = await requestMeta();
@@ -100,6 +101,12 @@ export async function submitCheckoutAction(
       };
     }
     await rememberReceipt(placed.order.id);
+    if (session && meta.saveAddress === true) {
+      // "Save this address" (FR-AC-06). Never stops the order.
+      await saveCheckoutAddress(session.user.id, { ...res.input, area: res.area }).catch((err) =>
+        logger.error({ err }, "saving the checkout address failed"),
+      );
+    }
     if (placed.lowStockProductIds.length > 0) {
       // "Only N left" / "Sold out" changed on these product pages.
       refreshTags(await productTags(await scopeOfProducts(placed.lowStockProductIds)));

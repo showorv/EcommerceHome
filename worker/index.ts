@@ -6,7 +6,10 @@ import { getQueue, ORDER_JOBS, QUEUE_NAMES, type NotificationJob } from "@/lib/q
 import { bullConnection } from "@/lib/redis";
 import { productTags, scopeOfProducts } from "@/modules/catalog/product-tags";
 import { ensureInvoicePdf } from "@/modules/invoices/pdf";
-import { sendEmail } from "@/modules/notifications/email";
+import { loadBrand } from "@/modules/notifications/brand";
+import { emailProvider, EmailSendError, errorText, type EmailAttachment } from "@/modules/notifications/email";
+import { renderEmailHtml } from "@/modules/notifications/email-layout";
+import { markSent, markTryFailed } from "@/modules/notifications/log";
 import { smsProvider, SmsSendError } from "@/modules/notifications/sms";
 import { releaseExpiredReservations } from "@/modules/orders/reservations";
 import { revalidateStore } from "./revalidate";
@@ -19,19 +22,38 @@ import { revalidateStore } from "./revalidate";
  */
 env(); // fail fast on bad configuration
 
+type EmailJob = Extract<NotificationJob, { kind: "email" }>;
+
+async function sendEmailJob(data: EmailJob) {
+  const html = data.html ?? (await renderEmailHtml(await loadBrand(), data));
+  const attachments: EmailAttachment[] = [];
+  if (data.attachInvoiceId) {
+    // Printed now if the PDF job hasn't finished yet. No invoice (deleted) = the email goes without it.
+    const inv = await ensureInvoicePdf(data.attachInvoiceId);
+    if (inv) attachments.push({ filename: `${inv.invoiceNo}.pdf`, content: inv.pdf, contentType: "application/pdf" });
+  }
+  return emailProvider().send({ to: data.to, subject: data.subject, text: data.text, html, attachments });
+}
+
+/**
+ * One SMS or email (FR-OR-07). Each try is noted in the message log: sent, or the error and whether
+ * the queue will try again. Errors that retrying can't fix (bad key, number or address) stop at once.
+ */
 async function handleNotification(job: Job<NotificationJob>) {
   const data = job.data;
-  if (data.kind === "sms") {
-    try {
-      return await smsProvider().send(data.to, data.text);
-    } catch (err) {
-      // A bad key, number or text won't get better by retrying: stop now, keep the job in the failed list.
-      if (err instanceof SmsSendError && err.permanent) throw new UnrecoverableError(err.message);
-      throw err;
-    }
+  try {
+    const res = data.kind === "sms" ? await smsProvider().send(data.to, data.text) : await sendEmailJob(data);
+    if (data.logId) await markSent(data.logId, res);
+    return res;
+  } catch (err) {
+    const message = errorText(err);
+    const permanent = (err instanceof SmsSendError || err instanceof EmailSendError) && err.permanent;
+    const lastTry = permanent || job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    if (data.logId) await markTryFailed(data.logId, message, lastTry).catch(() => undefined);
+    // Kept in the failed list either way, where staff can see it.
+    if (permanent) throw new UnrecoverableError(message);
+    throw err;
   }
-  const res = await sendEmail({ to: data.to, subject: data.subject, text: data.text, html: data.html });
-  return { provider: "smtp", ...res };
 }
 
 const RELEASE_JOB = ORDER_JOBS.releaseReservations;

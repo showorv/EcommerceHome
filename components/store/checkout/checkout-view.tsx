@@ -32,12 +32,15 @@ import {
   type CheckoutTotals,
   type PaymentMethod,
 } from "@/modules/checkout/checkout";
+import { MAX_ADDRESSES, sameAddress, type SavedAddress } from "@/modules/account/account";
+import { myAddressesAction } from "@/modules/account/actions";
 import { applyCoupon, type CouponTerms } from "@/modules/coupons/coupons";
 import type { DeliveryData } from "@/modules/delivery/data";
 import { WALLET_NAMES, type Wallet, type WalletType } from "@/modules/payments/payments";
 import { AdvancePayment } from "./advance-payment";
 import { CouponBox } from "./coupon-box";
 import { PhoneCodeDialog, type CodeSent } from "./phone-code-dialog";
+import { DRAFT_KEY } from "./draft";
 
 /**
  * Single-page checkout (FR-CO-02, SRS §2.2): the form on the left, an order summary that updates as the
@@ -74,7 +77,6 @@ const EMPTY: Form = {
   acceptTerms: false,
 };
 
-const DRAFT_KEY = "checkout:draft:v1";
 const selectClass =
   "h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive disabled:opacity-50";
 
@@ -143,6 +145,38 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
       phone: f.phone || (user.phoneNumber ? user.phoneNumber.replace(/^\+88/, "") : ""),
     }));
   }
+
+  // Signed-in customers: their saved addresses (FR-AC-06). The default one fills an empty form.
+  const [saved, setSaved] = useState<{ for: string; list: SavedAddress[] } | null>(null);
+  const [saveChoice, setSaveChoice] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!user || saved?.for === user.id) return;
+    let live = true;
+    void myAddressesAction()
+      .catch(() => [] as SavedAddress[])
+      .then((list) => {
+        if (!live) return;
+        setSaved({ for: user.id, list });
+        const d = list.find((a) => a.isDefault);
+        if (d) setForm((f) => (f.districtId || f.address.trim() ? f : fromSaved(f, d)));
+      });
+    return () => {
+      live = false;
+    };
+  }, [user, saved?.for]);
+  const savedList = user && saved?.for === user.id ? saved.list : null;
+  const typedPhone = normalizeBdPhone(form.phone) ?? form.phone;
+  const matching = savedList?.find((a) =>
+    sameAddress(a, {
+      name: form.name,
+      phone: typedPhone,
+      districtId: form.districtId,
+      areaId: form.areaId,
+      line: form.address,
+    }),
+  );
+  const canSave = savedList !== null && !matching && savedList.length < MAX_ADDRESSES;
+  const saveAddress = canSave && (saveChoice ?? savedList.length === 0);
 
   const districts = useMemo(
     () => [...config.districts].sort((a, b) => a.name.en.localeCompare(b.name.en)),
@@ -217,7 +251,9 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
     orderKey.current ??= crypto.randomUUID();
     const key = orderKey.current;
     start(async () => {
-      const res = await submitCheckoutAction(data, { key, expectedTotal: totals?.total }).catch(() => null);
+      const res = await submitCheckoutAction(data, { key, expectedTotal: totals?.total, saveAddress }).catch(
+        () => null,
+      );
       if (!res) {
         setNotice({ kind: "error", text: "Couldn't reach the store. Check your connection and try again." });
         return;
@@ -365,6 +401,38 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
         </Section>
 
         <Section title="Delivery address">
+          {savedList && savedList.length > 0 && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="co-saved">Saved addresses</Label>
+              <select
+                id="co-saved"
+                className={selectClass}
+                value={matching?.id ?? ""}
+                onChange={(e) => {
+                  const a = savedList.find((x) => x.id === e.target.value);
+                  // "A new address": empty the address so it can be typed; the name and number stay.
+                  setForm((f) => (a ? fromSaved(f, a) : { ...f, districtId: "", areaId: "", address: "", note: "" }));
+                  setErrors((x) => ({
+                    ...x,
+                    name: undefined,
+                    phone: undefined,
+                    districtId: undefined,
+                    areaId: undefined,
+                    address: undefined,
+                    note: undefined,
+                  }));
+                  setNotice(null);
+                }}
+              >
+                <option value="">A new address (type it below)</option>
+                {savedList.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {[a.label || "Address", a.name, a.place].filter(Boolean).join(" · ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="districtId" label="District" error={err("districtId")}>
               <select
@@ -430,6 +498,17 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
           >
             <Input id="co-note" maxLength={250} value={form.note} onChange={(e) => set("note", e.target.value)} />
           </Field>
+          {canSave && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={saveAddress}
+                onChange={(e) => setSaveChoice(e.target.checked)}
+              />
+              Save this address to my account for next time
+            </label>
+          )}
         </Section>
 
         <Section title="Payment">
@@ -766,4 +845,19 @@ function Row({ label: text, value, muted }: { label: string; value: string; mute
       <dd className={cn("text-right tabular-nums", muted ? "text-muted-foreground" : "font-medium")}>{value}</dd>
     </div>
   );
+}
+
+/** The form with a saved address filled in (name and phone too: it may be for someone else). */
+function fromSaved<
+  F extends { name: string; phone: string; districtId: string; areaId: string; address: string; note: string },
+>(f: F, a: SavedAddress): F {
+  return {
+    ...f,
+    name: a.name,
+    phone: a.phone.replace(/^\+88/, ""),
+    districtId: a.districtId,
+    areaId: a.areaId,
+    address: a.line,
+    note: a.note,
+  };
 }

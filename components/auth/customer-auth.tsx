@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { normalizeBdPhone } from "@/lib/phone";
 import { reloadCart } from "@/components/store/cart/cart-store";
+import { safeNext } from "@/modules/account/account";
 
-function GoogleButton({ enabled }: { enabled: boolean }) {
+function GoogleButton({ enabled, next = "/account" }: { enabled: boolean; next?: string }) {
   const [pending, start] = useTransition();
   if (!enabled) return null;
   return (
@@ -20,7 +21,7 @@ function GoogleButton({ enabled }: { enabled: boolean }) {
         variant="outline"
         disabled={pending}
         onClick={() =>
-          start(async () => void (await authClient.signIn.social({ provider: "google", callbackURL: "/account" })))
+          start(async () => void (await authClient.signIn.social({ provider: "google", callbackURL: next })))
         }
       >
         Continue with Google
@@ -35,6 +36,8 @@ function GoogleButton({ enabled }: { enabled: boolean }) {
 /** Sign in with email or BD phone number + password (FR-AC-03). */
 export function CustomerSignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
+  // Back to where sign-in was asked for (a wishlist heart, an account page), on this site only.
+  const next = safeNext(useSearchParams().get("next"));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -55,14 +58,14 @@ export function CustomerSignInForm({ googleEnabled }: { googleEnabled: boolean }
       }
       // A guest cart joins the account's cart now (FR-CO-01).
       void reloadCart();
-      router.replace("/account");
+      router.replace(next);
       router.refresh();
     });
   }
 
   return (
     <div className="grid gap-4">
-      <GoogleButton enabled={googleEnabled} />
+      <GoogleButton enabled={googleEnabled} next={next} />
       <form action={onSubmit} className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="identifier">Email or mobile number</Label>

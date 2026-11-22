@@ -128,6 +128,16 @@ export function MobileMenu({ items, storeName }: { items: MenuItem[]; storeName:
                 My account
               </Link>
             </li>
+            <li>
+              <Link href="/account/wishlist" className="hover:bg-accent block rounded-lg px-3 py-3 font-medium">
+                Wishlist
+              </Link>
+            </li>
+            <li>
+              <Link href="/track" className="hover:bg-accent block rounded-lg px-3 py-3 font-medium">
+                Track order
+              </Link>
+            </li>
           </ul>
         </nav>
       </DialogContent>

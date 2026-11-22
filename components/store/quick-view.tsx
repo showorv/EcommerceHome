@@ -11,6 +11,7 @@ import { SLUG_RE } from "@/modules/catalog/logic";
 import type { ProductView } from "@/modules/catalog/storefront";
 import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LabelChips, PriceLine, QuantityStepper, Rating, StockLine, useVariantChoice } from "./buy-parts";
+import { WishlistButton } from "./wishlist-button";
 import { MediaGallery } from "./media-gallery";
 import { VariantOptions } from "./variant-options";
 
@@ -150,7 +151,10 @@ function QuickViewBody({ product, onAdded }: { product: ProductView; onAdded: ()
         <LabelChips labels={product.labels} />
 
         <div className="grid gap-1 pr-8">
-          <DialogTitle className="text-xl leading-tight font-bold md:text-2xl">{title}</DialogTitle>
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle className="text-xl leading-tight font-bold md:text-2xl">{title}</DialogTitle>
+            <WishlistButton productId={product.id} title={title} variant="inline" className="size-9" />
+          </div>
           {product.title.bn && (
             <p lang="bn" className="text-muted-foreground">
               {product.title.bn}

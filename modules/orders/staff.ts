@@ -110,18 +110,6 @@ export const bulkCancelInput = bulkInput
   })
   .refine(otherNeedsNote, OTHER_NOTE);
 
-/** The "order confirmed" SMS (SRS §2.5), with the invoice link when there is one. */
-export function orderConfirmedSms(
-  o: { orderNo: string; total: number; codAmount: number },
-  store: string,
-  invoiceLink?: string,
-) {
-  const taka = (p: number) => `৳${Math.round(p / 100).toLocaleString("en-US")}`;
-  const cod = o.codAmount !== o.total ? ` (COD ${taka(o.codAmount)})` : "";
-  const end = invoiceLink ? ` Invoice: ${invoiceLink}` : " Thank you!";
-  return `${store}: Order #${o.orderNo} confirmed. Total ${taka(o.total)}${cod}.${end}`;
-}
-
 // ---------- Editing before confirmation (FR-OR-08) ----------
 
 const qty = z.coerce

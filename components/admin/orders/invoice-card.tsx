@@ -95,7 +95,7 @@ export function InvoiceCard({ orderNo, invoice, issued, expires, canWrite }: Pro
               </DialogHeader>
               <div className="flex items-center gap-2">
                 <Checkbox id="invoice-sms" checked={sendSms} onCheckedChange={(v) => setSendSms(v === true)} />
-                <Label htmlFor="invoice-sms">Send the new link to the customer by SMS</Label>
+                <Label htmlFor="invoice-sms">Send the new link to the customer (SMS, and email if they gave one)</Label>
               </div>
             </>
           ) : (

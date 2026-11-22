@@ -3,14 +3,12 @@ import { createHash } from "node:crypto";
 import mongoose from "mongoose";
 import { connectMongoose } from "@/lib/db/mongo";
 import { trustFilter } from "@/lib/db/trusted-filter";
-import { env } from "@/lib/env";
-import { logger } from "@/lib/logger";
-import { enqueueNotification } from "@/lib/queue";
 import { Cart } from "@/modules/cart/models";
 import { syncProductFromVariants } from "@/modules/catalog/listing-sync";
 import { Product, Variant } from "@/modules/catalog/models";
 import type { CheckoutCheck } from "@/modules/checkout/data";
 import { CouponModel } from "@/modules/coupons/models";
+import { notifyOrder } from "@/modules/notifications/send";
 import { Setting } from "@/modules/payments/models";
 import { nextSequenceInSession } from "@/modules/shared/counters";
 import { Order } from "./models";
@@ -19,7 +17,6 @@ import {
   DEFAULT_RESERVATION_HOURS,
   formatOrderNo,
   ORDER_NO_START,
-  orderReceivedSms,
   ORDERS_PER_PHONE_PER_HOUR,
   showsLowStock,
   type NewOrder,
@@ -219,17 +216,14 @@ export async function placeOrder(input: {
   }
 
   if (!doc) throw new Error("Order transaction finished without an order");
-  // After the order is safe: the "order received" SMS (a failed send never undoes the order).
-  try {
-    await enqueueNotification({
-      kind: "sms",
-      to: doc.customer.phone,
-      text: orderReceivedSms(doc.orderNo, env().STORE_NAME),
-      purpose: "order_received",
-    });
-  } catch (err) {
-    logger.error({ err, orderNo: doc.orderNo }, "order received SMS could not be queued");
-  }
+  // After the order is safe: the "order received" SMS and email (a failed send never undoes the order).
+  await notifyOrder("order_received", {
+    id: orderId,
+    orderNo: doc.orderNo,
+    customer: doc.customer,
+    total: doc.total,
+    codAmount: doc.codAmount,
+  });
 
   return {
     ok: true,

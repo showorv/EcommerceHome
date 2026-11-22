@@ -2,14 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CartLine } from "@/modules/cart/logic";
 import { checkoutInput, checkoutTotals } from "@/modules/checkout/checkout";
 import { defaultRules, type Zone } from "@/modules/delivery/charge";
-import {
-  buildOrder,
-  formatOrderNo,
-  isOrderNo,
-  normalizeOrderKey,
-  orderReceivedSms,
-  showsLowStock,
-} from "@/modules/orders/orders";
+import { buildOrder, formatOrderNo, isOrderNo, normalizeOrderKey, showsLowStock } from "@/modules/orders/orders";
 import { readReceipt, signReceipt } from "@/modules/orders/receipt";
 
 const oid = (n: number) => n.toString(16).padStart(24, "0");
@@ -184,12 +177,6 @@ describe("the order a checkout becomes", () => {
 });
 
 describe("after the order", () => {
-  it("texts a short order-received message", () => {
-    expect(orderReceivedSms("SR10234", "China Import Store")).toBe(
-      "China Import Store: Order #SR10234 received. We will call you to confirm.",
-    );
-  });
-
   it("rebuilds the product page only when it shows low stock", () => {
     expect(showsLowStock({ stock: 20, reserved: 2 }, 5)).toBe(false);
     expect(showsLowStock({ stock: 7, reserved: 2 }, 5)).toBe(true);

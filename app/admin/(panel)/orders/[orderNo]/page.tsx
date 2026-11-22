@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { CallLog, Notes } from "@/components/admin/orders/calls-and-notes";
 import { dhakaTime, PaymentBadge, RiskBadge, showPhone, StatusBadge, telHref } from "@/components/admin/orders/bits";
+import { MessageList } from "@/components/admin/notifications/message-list";
 import { InvoiceCard } from "@/components/admin/orders/invoice-card";
 import { OrderActions } from "@/components/admin/orders/order-actions";
 import { RefundButton } from "@/components/admin/orders/refund";
@@ -17,6 +18,7 @@ import { requireStaff } from "@/modules/auth/session";
 import { PAYMENT_METHOD_NAMES } from "@/modules/checkout/checkout";
 import { BLOCK_KIND_NAMES } from "@/modules/customers/blocks";
 import { adminInvoice } from "@/modules/invoices/data";
+import { orderNotifications } from "@/modules/notifications/data";
 import { getAdminOrder, phoneSummary, requestTime } from "@/modules/orders/admin-data";
 import { canRefund, moneyIn } from "@/modules/orders/lifecycle";
 import { isOrderNo, ORDER_STATUS_NAMES, PAYMENT_STATUS_NAMES, type OrderStatus } from "@/modules/orders/orders";
@@ -47,9 +49,10 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
   const order = await getAdminOrder(orderNo);
   if (!order) notFound();
   const now = await requestTime();
-  const [others, invoice] = await Promise.all([
+  const [others, invoice, messages] = await Promise.all([
     phoneSummary(order.customer.phone, order.orderNo),
     adminInvoice(order.id, now),
+    orderNotifications(order.id),
   ]);
   const mayUpdate = permissions.has("orders.update");
   const a = order.advance;
@@ -348,6 +351,15 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
               canWrite={mayUpdate}
             />
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Messages</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MessageList rows={messages} now={now} canResend={mayUpdate} showOrder={false} />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

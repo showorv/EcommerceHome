@@ -34,10 +34,6 @@ export function linkState(
   return new Date(i.tokenExpiresAt).getTime() <= now ? "expired" : "active";
 }
 
-/** The SMS with a new link (after the old one was replaced). */
-export const invoiceLinkSms = (orderNo: string, store: string, link: string) =>
-  `${store}: Your invoice for order #${orderNo}: ${link}`;
-
 export const LINK_STATE_NAMES: Record<LinkState, string> = {
   active: "Link works",
   expired: "Link expired",

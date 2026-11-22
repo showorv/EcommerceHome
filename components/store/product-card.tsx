@@ -13,6 +13,7 @@ import type { CardMedia, CardProduct } from "@/modules/catalog/storefront";
 import { addToCart, useCartAdding } from "./cart/cart-store";
 import { LABELS, LOUD_LABELS } from "./labels";
 import { prefetchQuickView, useOpenQuickView } from "./quick-view";
+import { WishlistButton } from "./wishlist-button";
 
 /**
  * Storefront product card (FR-PC-01…03, 05, 07).
@@ -148,11 +149,14 @@ export function ProductCard({ product, eager = false }: { product: CardProduct; 
               </span>
             ))}
           </div>
-          {(product.discount > 0 || product.maxDiscount > 0) && (
-            <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white shadow-sm">
-              {product.discount > 0 ? `−${product.discount}%` : `Up to −${product.maxDiscount}%`}
-            </span>
-          )}
+          <div className="flex shrink-0 items-start gap-1">
+            {(product.discount > 0 || product.maxDiscount > 0) && (
+              <span className="mt-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold whitespace-nowrap text-white shadow-sm">
+                {product.discount > 0 ? `−${product.discount}%` : `Up to −${product.maxDiscount}%`}
+              </span>
+            )}
+            <WishlistButton productId={product.id} title={title} className="pointer-events-auto size-8" />
+          </div>
         </div>
 
         {/* Stock badge */}

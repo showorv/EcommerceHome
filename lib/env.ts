@@ -36,6 +36,12 @@ const schema = z
     SMTP_USER: optional,
     SMTP_PASS: optional,
     EMAIL_FROM: z.string().default("Store <no-reply@localhost>"),
+    /**
+     * Email provider (SRS §8.3): "smtp" uses the SMTP_* settings (Mailpit in development; Amazon SES and
+     * Brevo give SMTP settings too); "resend" uses Resend's API with RESEND_API_KEY.
+     */
+    EMAIL_PROVIDER: z.enum(["smtp", "resend"]).default("smtp"),
+    RESEND_API_KEY: optional,
 
     /**
      * SMS gateway (SRS §8.2). "console" prints messages (and OTP codes) in the worker log; "alpha" is
@@ -76,6 +82,9 @@ const schema = z
         path: ["ALPHA_SMS_API_KEY"],
         message: "ALPHA_SMS_API_KEY is needed for Alpha SMS",
       });
+    }
+    if (v.EMAIL_PROVIDER === "resend" && !v.RESEND_API_KEY) {
+      ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "RESEND_API_KEY is needed for Resend" });
     }
   });
 

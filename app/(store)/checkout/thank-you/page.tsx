@@ -134,11 +134,17 @@ function OrderReceipt({ order: o }: { order: ReceiptView }) {
         </div>
       </section>
 
-      <div className="flex justify-center">
+      <div className="flex flex-wrap justify-center gap-3">
         <Button asChild size="lg">
           <Link href="/">Continue shopping</Link>
         </Button>
+        <Button asChild size="lg" variant="outline">
+          <Link href={`/track?order=${o.orderNo}`}>Track this order</Link>
+        </Button>
       </div>
+      <p className="text-muted-foreground -mt-4 text-center text-xs">
+        Keep your order number: with it and your mobile number you can see where your order is any time.
+      </p>
     </div>
   );
 }

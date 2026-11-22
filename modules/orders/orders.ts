@@ -230,11 +230,6 @@ export function buildOrder(input: {
   };
 }
 
-/** The "order received" SMS (SRS §2.5). Editable templates arrive with the other notifications. */
-export function orderReceivedSms(orderNo: string, store: string): string {
-  return `${store}: Order #${orderNo} received. We will call you to confirm.`;
-}
-
 /**
  * A variant now at or below its low-stock level (or sold out): its product page shows "Only N left" or
  * "Sold out", so that page is rebuilt after the order. Other orders leave the cached pages as they are.

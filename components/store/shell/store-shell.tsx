@@ -69,6 +69,9 @@ export async function StoreShell({
               </Suspense>
             </div>
             <nav className="flex shrink-0 items-center gap-4 text-sm" aria-label="Account">
+              <Link href="/track" className="text-muted-foreground hover:text-foreground hidden lg:inline">
+                Track order
+              </Link>
               <Link href="/account" className="text-muted-foreground hover:text-foreground hidden sm:inline">
                 Account
               </Link>

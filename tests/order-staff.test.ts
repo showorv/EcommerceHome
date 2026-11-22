@@ -11,7 +11,6 @@ import {
   dhakaDayStart,
   editedTotals,
   needsAdvanceCheck,
-  orderConfirmedSms,
   orderCsvLine,
   orderEditInput,
   orderFiltersQuery,
@@ -58,15 +57,6 @@ describe("what staff can do with an order", () => {
     expect(cancelInput.safeParse({ ...base, orderNo: { $ne: "" }, reason: "Fake order" }).success).toBe(false);
     expect(cancelNote("Fake order", "")).toBe("Fake order");
     expect(cancelNote("Other", "Moved abroad")).toBe("Other: Moved abroad");
-  });
-
-  it("texts a short confirmation", () => {
-    expect(orderConfirmedSms({ orderNo: "SR10234", total: 145000, codAmount: 135000 }, "China Import Store")).toBe(
-      "China Import Store: Order #SR10234 confirmed. Total ৳1,450 (COD ৳1,350). Thank you!",
-    );
-    expect(orderConfirmedSms({ orderNo: "SR10234", total: 145000, codAmount: 145000 }, "Shop")).toBe(
-      "Shop: Order #SR10234 confirmed. Total ৳1,450. Thank you!",
-    );
   });
 });
 

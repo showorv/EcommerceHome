@@ -5,9 +5,10 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { trustFilter } from "@/lib/db/trusted-filter";
 import { logger } from "@/lib/logger";
-import { enqueueInvoicePdf, enqueueNotification } from "@/lib/queue";
+import { enqueueInvoicePdf } from "@/lib/queue";
 import { invoiceUrl } from "@/modules/invoices/invoices";
 import { writeAudit } from "@/modules/audit/audit";
+import { notifyOrder } from "@/modules/notifications/send";
 import type { Permission } from "@/modules/auth/rbac";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { productTags, refreshTags, scopeOfProducts } from "@/modules/catalog/store-refresh";
@@ -38,7 +39,6 @@ import {
   holdInput,
   needsAdvanceCheck,
   noteInput,
-  orderConfirmedSms,
   orderEditInput,
   type AdminOrder,
 } from "./staff";
@@ -101,24 +101,32 @@ async function refreshProducts(productIds: string[]) {
   if (productIds.length > 0) refreshTags(await productTags(await scopeOfProducts(productIds)));
 }
 
-/** After a confirmation: the PDF is printed in the background and the SMS carries the invoice link. */
-async function afterConfirm(o: AdminOrder, invoice: { id: string; token: string }) {
+/** After a confirmation: the PDF is printed in the background; the SMS and email carry the invoice link. */
+async function afterConfirm(o: AdminOrder, invoice: { id: string; invoiceNo: string; token: string }) {
   try {
     await enqueueInvoicePdf(invoice.id);
   } catch (err) {
     // Not fatal: the PDF is printed when the link is first opened.
     logger.error({ err, orderNo: o.orderNo }, "invoice PDF job could not be queued");
   }
-  try {
-    await enqueueNotification({
-      kind: "sms",
-      to: o.customer.phone,
-      text: orderConfirmedSms(o, env().STORE_NAME, invoiceUrl(env().APP_URL, invoice.token)),
-      purpose: "order_confirmed",
-    });
-  } catch (err) {
-    logger.error({ err, orderNo: o.orderNo }, "order confirmed SMS could not be queued");
-  }
+  await notifyOrder("order_confirmed", o, {
+    id: invoice.id,
+    invoiceNo: invoice.invoiceNo,
+    link: invoiceUrl(env().APP_URL, invoice.token),
+  });
+}
+
+/** The customer hears about these moves (each can be switched off in Admin → Notifications). */
+const MOVE_EVENTS = {
+  shipped: "order_shipped",
+  delivered: "order_delivered",
+  cancelled: "order_cancelled",
+  returned: "order_returned",
+} as const;
+
+async function tellCustomer(o: AdminOrder, move: string) {
+  const event = MOVE_EVENTS[move as keyof typeof MOVE_EVENTS];
+  if (event) await notifyOrder(event, o);
 }
 
 async function run(work: () => Promise<string>): Promise<OrderActionResult> {
@@ -144,7 +152,7 @@ export async function confirmOrderAction(raw: unknown): Promise<OrderActionResul
     const done = await confirmOrder(p.data, s.actor);
     await audit(s, "order.confirm", done, { invoiceNo: done.invoice.invoiceNo });
     await afterConfirm(done.after, done.invoice);
-    return `${done.after.orderNo} confirmed: invoice ${done.invoice.invoiceNo}. The customer gets an SMS with the link.`;
+    return `${done.after.orderNo} confirmed: invoice ${done.invoice.invoiceNo}. The customer gets the link by SMS.`;
   });
 }
 
@@ -169,6 +177,7 @@ export async function cancelOrderAction(raw: unknown): Promise<OrderActionResult
     const done = await cancelOrder(p.data, s.actor);
     await audit(s, "order.cancel", done, { reason: done.after.cancelReason });
     await refreshProducts(done.productIds);
+    await tellCustomer(done.after, "cancelled");
     return `${done.after.orderNo} cancelled.`;
   });
 }
@@ -189,6 +198,7 @@ export async function moveOrderAction(raw: unknown): Promise<OrderActionResult> 
   return run(async () => {
     const done = await moveOrder(p.data, s.actor);
     await audit(s, `order.${p.data.to}`, done, p.data.note ? { note: p.data.note } : undefined);
+    await tellCustomer(done.after, p.data.to);
     return `${done.after.orderNo} ${MOVED[p.data.to]}.`;
   });
 }
@@ -202,6 +212,7 @@ export async function returnOrderAction(raw: unknown): Promise<OrderActionResult
     const done = await returnOrder(p.data, s.actor);
     await audit(s, "order.returned", done, { reason: done.after.returnReason });
     await refreshProducts(done.productIds);
+    await tellCustomer(done.after, "returned");
     return `${done.after.orderNo} returned. The items are back in stock.`;
   });
 }
@@ -373,6 +384,7 @@ export async function bulkCancelAction(raw: unknown): Promise<BulkResult> {
       s.actor,
     );
     await audit(s, "order.cancel", done, { reason: done.after.cancelReason, bulk: true });
+    await tellCustomer(done.after, "cancelled");
     done.productIds.forEach((id) => productIds.add(id));
   });
   await refreshProducts([...productIds]);
@@ -396,6 +408,7 @@ export async function bulkMoveAction(raw: unknown): Promise<BulkResult> {
   const r = await safely(eachOrder)(p.data.orderNos, async (o) => {
     const done = await moveOrder({ orderNo: o.orderNo, rev: o.rev, to, note: "" }, s.actor);
     await audit(s, `order.${to}`, done, { bulk: true });
+    await tellCustomer(done.after, to);
   });
   refresh();
   return { ok: true, message: summary(BULK_MOVED[to], r.done.length, r.skipped.length), ...r };
