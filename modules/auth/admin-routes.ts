@@ -22,6 +22,7 @@ export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: Permission }
   { prefix: "/admin/coupons", permission: "coupons.manage" },
   { prefix: "/admin/delivery", permission: "zones.manage" },
   { prefix: "/admin/payments", permission: "settings.manage" },
+  { prefix: "/admin/integrations", permission: "integrations.manage" },
   { prefix: "/admin/invoices", permission: "settings.manage" },
   { prefix: "/admin/notifications", permission: "orders.view" },
   { prefix: "/admin/notifications/templates", permission: "settings.manage" },

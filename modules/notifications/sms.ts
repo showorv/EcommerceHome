@@ -1,6 +1,7 @@
-import { env } from "@/lib/env";
+import { sha256 } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import { maskPhone } from "@/lib/phone";
+import { smsSettings, type SmsSettings } from "@/modules/integrations/store";
 
 /**
  * SMS provider adapter (SRS §8.2, NFR-AV-02). Business logic only talks to `SmsProvider`, so the gateway
@@ -121,20 +122,27 @@ export class FallbackSmsProvider implements SmsProvider {
   }
 }
 
-function build(name: "console" | "alpha"): SmsProvider {
-  const e = env();
-  if (name === "alpha") return new AlphaSmsProvider(e.ALPHA_SMS_API_KEY!, e.SMS_SENDER_ID);
+function build(name: "console" | "alpha", s: SmsSettings): SmsProvider {
+  if (name === "alpha") {
+    if (!s.alphaApiKey) throw new SmsSendError("Alpha SMS has no API key (see Admin → Integrations)", "alpha", true);
+    return new AlphaSmsProvider(s.alphaApiKey, s.senderId ?? undefined);
+  }
   return new ConsoleSmsProvider();
 }
 
-let cached: SmsProvider | undefined;
+let cached: { fingerprint: string; provider: SmsProvider } | undefined;
 
-/** The configured provider, with the fallback behind it when one is set. */
-export function smsProvider(): SmsProvider {
-  if (cached) return cached;
-  const e = env();
-  const main = build(e.SMS_PROVIDER);
-  const fallback = e.SMS_FALLBACK_PROVIDER;
-  cached = fallback && fallback !== e.SMS_PROVIDER ? new FallbackSmsProvider([main, build(fallback)]) : main;
-  return cached;
+/**
+ * The provider in force (Admin → Integrations, or the environment), with the fallback behind it when
+ * one is set. Rebuilt only when the settings change.
+ */
+export async function smsProvider(): Promise<SmsProvider> {
+  const s = await smsSettings();
+  const fingerprint = sha256(JSON.stringify(s));
+  if (cached?.fingerprint === fingerprint) return cached.provider;
+  const main = build(s.provider, s);
+  const provider =
+    s.fallback && s.fallback !== s.provider ? new FallbackSmsProvider([main, build(s.fallback, s)]) : main;
+  cached = { fingerprint, provider };
+  return provider;
 }

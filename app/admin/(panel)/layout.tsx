@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { href: "/admin/order-rules", label: "Order rules" },
   { href: "/admin/blocked-numbers", label: "Blocked numbers" },
   { href: "/admin/messages", label: "Messages" },
+  { href: "/admin/integrations", label: "Integrations" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/system", label: "Jobs & system" },

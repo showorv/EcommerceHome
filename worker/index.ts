@@ -32,7 +32,7 @@ async function sendEmailJob(data: EmailJob) {
     const inv = await ensureInvoicePdf(data.attachInvoiceId);
     if (inv) attachments.push({ filename: `${inv.invoiceNo}.pdf`, content: inv.pdf, contentType: "application/pdf" });
   }
-  return emailProvider().send({ to: data.to, subject: data.subject, text: data.text, html, attachments });
+  return (await emailProvider()).send({ to: data.to, subject: data.subject, text: data.text, html, attachments });
 }
 
 /**
@@ -42,7 +42,7 @@ async function sendEmailJob(data: EmailJob) {
 async function handleNotification(job: Job<NotificationJob>) {
   const data = job.data;
   try {
-    const res = data.kind === "sms" ? await smsProvider().send(data.to, data.text) : await sendEmailJob(data);
+    const res = data.kind === "sms" ? await (await smsProvider()).send(data.to, data.text) : await sendEmailJob(data);
     if (data.logId) await markSent(data.logId, res);
     return res;
   } catch (err) {

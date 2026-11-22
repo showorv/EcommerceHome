@@ -1,11 +1,13 @@
 import nodemailer, { type Transporter } from "nodemailer";
-import { env } from "@/lib/env";
+import { sha256 } from "@/lib/crypto";
+import { emailSettings } from "@/modules/integrations/store";
 
 /**
  * Email provider adapter (SRS §8.3). The worker sends through `emailProvider()`:
  * - "smtp": any SMTP server. Mailpit in development (http://localhost:8025); Amazon SES and Brevo
  *   both give SMTP settings, so they work here too.
- * - "resend": Resend's HTTP API with RESEND_API_KEY.
+ * - "resend": Resend's HTTP API.
+ * The settings come from Admin → Integrations, or the environment variables (modules/integrations/store.ts).
  */
 
 export type EmailAttachment = { filename: string; content: Buffer; contentType: string };
@@ -47,18 +49,21 @@ export function errorText(err: unknown): string {
   return inner || e?.code || String(err) || "unknown error";
 }
 
+export type SmtpOptions = { host: string; port: number; user: string | null; pass: string | null; from: string };
+
 export class SmtpEmailProvider implements EmailProvider {
   readonly name = "smtp";
   private transporter: Transporter | undefined;
+  constructor(private readonly opts: SmtpOptions) {}
 
   private transport(): Transporter {
     if (!this.transporter) {
-      const e = env();
+      const o = this.opts;
       this.transporter = nodemailer.createTransport({
-        host: e.SMTP_HOST,
-        port: e.SMTP_PORT,
-        secure: e.SMTP_PORT === 465,
-        auth: e.SMTP_USER && e.SMTP_PASS ? { user: e.SMTP_USER, pass: e.SMTP_PASS } : undefined,
+        host: o.host,
+        port: o.port,
+        secure: o.port === 465,
+        auth: o.user && o.pass ? { user: o.user, pass: o.pass } : undefined,
       });
     }
     return this.transporter;
@@ -66,7 +71,7 @@ export class SmtpEmailProvider implements EmailProvider {
 
   async send(msg: EmailMessage) {
     try {
-      const info = await this.transport().sendMail({ from: env().EMAIL_FROM, ...msg });
+      const info = await this.transport().sendMail({ from: this.opts.from, ...msg });
       return { provider: this.name, providerMessageId: String(info.messageId ?? "") };
     } catch (err) {
       const code = (err as { responseCode?: number }).responseCode;
@@ -125,12 +130,20 @@ export class ResendEmailProvider implements EmailProvider {
   }
 }
 
-let cached: EmailProvider | undefined;
+let cached: { fingerprint: string; provider: EmailProvider } | undefined;
 
-export function emailProvider(): EmailProvider {
-  if (cached) return cached;
-  const e = env();
-  cached =
-    e.EMAIL_PROVIDER === "resend" ? new ResendEmailProvider(e.RESEND_API_KEY!, e.EMAIL_FROM) : new SmtpEmailProvider();
-  return cached;
+/** The provider in force (Admin → Integrations, or the environment). Rebuilt only when that changes. */
+export async function emailProvider(): Promise<EmailProvider> {
+  const s = await emailSettings();
+  const fingerprint = sha256(JSON.stringify(s));
+  if (cached?.fingerprint === fingerprint) return cached.provider;
+  let provider: EmailProvider;
+  if (s.provider === "resend") {
+    if (!s.resendApiKey) throw new EmailSendError("Resend has no API key (see Admin → Integrations)", "resend", true);
+    provider = new ResendEmailProvider(s.resendApiKey, s.from);
+  } else {
+    provider = new SmtpEmailProvider({ ...s.smtp, from: s.from });
+  }
+  cached = { fingerprint, provider };
+  return provider;
 }

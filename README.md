@@ -120,7 +120,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4) — _on hold until you have a Steadfast merchant account; built after that_
 - [x] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
 - [x] 2.15 Customers admin + dashboard (FR-AD-01, FR-AD-06)
-- [ ] 2.16 Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13)
+- [x] 2.16 Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13)
 - [ ] 2.17 Manual order form for Facebook/WhatsApp orders (Open question 9)
 
 **Done when:** all "Ordering and confirmation" acceptance criteria in SRS §9.1 pass.
@@ -302,6 +302,37 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-22 · Phase 2.16 — Integrations settings with encrypted keys
+
+- **Admin → Integrations** (FR-AD-12), owner only (_integrations.manage_; managers and staff get
+  "no permission" from the server). One card each for **SMS**, **Email**, **Courier** and **Media
+  storage**.
+- Each card chooses where its settings come from:
+  - **Use the server's .env** — how it worked before, and still the default. The card shows what the
+    environment has, with secrets masked.
+  - **Use the settings below** — keys typed in admin. SMS: provider, fallback, Alpha SMS key, sender
+    ID. Email: SMTP (host, port, user, password) or Resend, and the From address. Courier: Steadfast
+    API key and secret key, ready for 2.13. Media: Cloudinary cloud name, API key and secret.
+- **Keys are encrypted** (AES-256-GCM with `ENCRYPTION_KEY`, NFR-SEC-13) and never sent back to the
+  browser: a saved key shows as `••••••••` and its last 4 characters. Typing a new one replaces it;
+  **Remove** deletes it. The audit log (`integrations.update`) records only the masks.
+- Saves are checked: a provider needs its key, SMTP user and password go together, Steadfast and
+  Cloudinary need all their keys, the From address must be a real address.
+- The **worker** (SMS, email) and **media uploads** now use these settings. Changes take effect within
+  about 30 seconds; no restart needed.
+- **If you ever change `ENCRYPTION_KEY`**, keys saved here can't be read any more: the card says so,
+  and you type them again.
+- **Checked in the browser** as a temporary owner, on a phone-sized screen too: the .env summaries,
+  saving Steadfast keys (one key alone is refused), the database, page and audit log holding no key
+  in plain text, media uploads switching to saved Cloudinary values and back, Alpha SMS without a key
+  refused, and removing keys. Email was not switched, so nothing could be sent through your Gmail.
+- **Cleanup:** removed the temporary owner, the integrations settings it saved and its 8 audit
+  entries. Nothing was uploaded to Cloudinary (only upload signatures were made).
+- 10 new tests (323 total); lint, types, formatting and the production build pass.
+- Not committed yet.
+
+**Next:** Phase 2.17 — Manual order form for Facebook/WhatsApp orders (Open question 9).
+
 ### 2026-11-22 · Phase 2.15 — Customers admin and dashboard
 
 - **Dashboard** (FR-AD-01) at `/admin`, for **Today · Last 7 days · Last 30 days** (Dhaka time):
@@ -330,7 +361,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Cleanup:** removed the 7 test orders, the flag, the temporary manager and its 2 audit entries.
   Nothing else was touched; the chopper's stock is unchanged.
 - 10 new tests (313 total); lint, types, formatting and the production build pass.
-- Not committed yet.
+- Committed and pushed (4b1cbef).
 
 **Next:** Phase 2.16 — Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13).
 
