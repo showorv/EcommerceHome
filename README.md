@@ -113,8 +113,8 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.6 Coupons (FR-CO-04)
 - [x] 2.7 Order placement: server re-validation, idempotency key, MongoDB transaction, atomic stock reservation, order number counter (FR-CO-05…07, NFR-SC-07)
 - [x] 2.8 Risk score + blocked contacts + rules that require advance (SRS §2.4)
-- [ ] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
-- [ ] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
+- [x] 2.9 Admin orders: pending queue, click-to-call, call log, notes, edit before confirm, confirm/cancel with reason, bulk actions (FR-OR-08/09, FR-AD-05)
+- [x] 2.10 Order state machine + separate payment status, enforced on server (FR-OR-01/02)
 - [ ] 2.11 Invoice: sequential number, PDF with Bangla font, signed token link with expiry/revoke (FR-OR-03…05)
 - [ ] 2.12 Email adapter (Resend/SES/Brevo) + React Email templates; editable SMS/email templates; notification log with retry (FR-OR-06/07)
 - [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4)
@@ -301,6 +301,150 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-22 · Phase 2.10 — Order state machine and payment status
+
+- **Allowed status moves**, checked on the server for every change (FR-OR-01):
+
+  | From                                  | To                                              |
+  | ------------------------------------- | ----------------------------------------------- |
+  | Pending                               | On hold, Confirmed, Cancelled                   |
+  | On hold                               | Pending (back to To call), Confirmed, Cancelled |
+  | Confirmed                             | Packed, Cancelled                               |
+  | Packed                                | Shipped, Cancelled                              |
+  | Shipped                               | Delivered, Partly delivered, Returned           |
+  | Delivered                             | Returned (customer return)                      |
+  | Partly delivered, Cancelled, Returned | — (final)                                       |
+
+  Anything else is refused with a plain message, e.g. "A pending order can't be moved to shipped.",
+  even if an old page or a hand-made request asks for it.
+
+- **Stock follows the order:**
+  - cancelled after confirmation (confirmed or packed): the items go back into stock, with a
+    "Order cancelled" movement
+  - returned: every unit goes back, with a "Return" movement
+  - partly delivered: staff enter the units that came back; only those go back
+- **Payment status on its own track** (FR-OR-02): Unpaid, Advance to check, Advance checked, Paid,
+  Refunded. Each change is kept in the order's history with who and why.
+  - Confirming with the TrxID tick → Advance checked
+  - Delivered → Paid, with what the courier collected saved. Partly delivered → Paid, with the amount
+    staff enter (the page suggests the door amount less what came back).
+  - Cancelled with "Advance not received" → Unpaid, and the advance shows "Never arrived"
+  - **Mark refunded** (new `orders.refund` permission: managers and the owner) on cancelled, returned
+    or partly delivered orders that took money. Staff enter the amount and how it was sent back. It
+    can't be more than the shop received.
+- **Orders page:**
+  - new tabs: To pack, To ship, On the way, Delivered (with partly delivered), Returned
+  - work queues list the oldest first
+  - bulk actions follow the tab: Confirm/Cancel, Mark packed/Cancel, Mark shipped/Cancel, Mark
+    delivered
+  - the CSV export has two new columns: Collected and Refunded
+- **Order page:** a button for each allowed move, each with a short dialog. Returns need a reason
+  (refused at the door, couldn't reach, wrong address, customer return, damaged, other). Units that
+  came back are shown on the items. The payment card shows what was collected and refunded.
+- Every move goes to the audit log (`order.packed`, `order.shipped`, `order.delivered`,
+  `order.partially_delivered`, `order.returned`, `order.refund`).
+- **Checked** with 6 test orders, by running the same server functions the buttons use against the
+  database (the browser needed a fresh sign-in after the restart, see below):
+  - pending → confirmed → packed → shipped → delivered: paid, ৳1,520 collected
+  - advance checked on confirm, cancelled after confirmation: stock back with a cancel movement;
+    a refund above ৳130 was refused, ৳130 was accepted, and a second refund was refused
+  - partly delivered with 1 of 2 Blue back: that unit back in stock, ৳1,520 collected; "everything
+    came back" was refused as a partial
+  - returned by the courier: stock back, still unpaid, refund refused
+  - advance not received: unpaid, advance "never arrived", hold released
+  - on hold → back to To call; a stale copy, skipping a step, delivered → packed, and cancelling a
+    shipped order were all refused
+  - stock at the end matched the sums exactly (Red 28 with 1 held, Blue 21)
+- **Then checked in the browser** with 6 fresh test orders:
+  - Confirm → Mark packed → Mark shipped → Mark delivered through the dialogs; the delivered order
+    offers only "Mark returned" and shows ৳1,520 collected
+  - advance order: Confirm needed the TrxID tick; Cancel said the items go back into stock; a ৳200
+    refund was refused, ৳130 accepted, and the button then went away
+  - bulk Confirm, Mark packed and Mark shipped on two orders; each tab offered the right buttons and
+    On the way had no Cancel
+  - partly delivered: nothing back was refused; with 1 Blue back the page suggested ৳2,870 and the
+    items show "1 came back"
+  - Mark returned needed a reason ("Other" also needs a note)
+  - Put on hold → Back to To call
+  - the list and the order page work at phone size
+- **Cleanup:** removed both rounds of test orders, their stock movements, the 4 confirmation SMS jobs
+  and the 17 audit entries. The chopper's stock, held count and every other field are back exactly
+  as before.
+- 18 new tests (267 total); lint, types, formatting and the production build pass.
+- After the restart, Docker Desktop, the database and `npm run dev` were down. I started Docker, the
+  containers and the dev server (in the preview pane).
+- Committed together with 2.9.
+
+**Next:** Phase 2.11 — invoice: sequential number, PDF with Bangla font, signed link with expiry and
+revoke.
+
+### 2026-11-21 · Phase 2.9 — Admin orders
+
+- **New Admin → Orders** (`orders.view`, staff and up), right after Dashboard in the menu, with a count
+  of orders waiting for a call.
+  - **Tabs:** To call, On hold, Confirmed, Cancelled, All, each with its count. To call and On hold
+    show the oldest order first, so nobody waits too long.
+  - **Search** by order number, phone or name. **Filters:** zone, payment, and from/to dates (Dhaka
+    days). 50 orders a page.
+  - Each row shows the waiting time, a tap-to-call phone number, area and zone, total, payment, risk
+    and the last call.
+  - **Export CSV** (`orders.export`, manager and up) saves what the list shows, up to 5,000 orders.
+    It opens in Excel with Bangla intact, and text that looks like a formula is made harmless. Each
+    export is audited.
+- **Order page:** items and totals, the customer with a Call button, the earlier orders on the same
+  phone (delivered / cancelled / returned), the risk reasons, the bKash/Nagad advance with its TrxID,
+  and the full history with who did what.
+  - **Call log:** pick the outcome (confirmed by phone, no answer, call later, switched off, wrong
+    number, refused) and add a note.
+  - **Notes** for other staff.
+- **Confirm:**
+  - If the customer sent an advance, staff must tick "I found this TrxID and amount in the statement".
+    That marks the advance as checked.
+  - Confirming takes the items out of stock for good and records a stock movement. This was planned
+    for 2.10 and is here now.
+  - The customer gets an SMS, e.g. "Order #SR10001 confirmed. Total ৳1,450 (COD ৳1,350)."
+- **Put on hold** (needs a reason). The stock stays held until the hold time from Order rules ends.
+- **Cancel** with a reason from a list. "Other" needs a note. Held stock goes back on sale and any
+  coupon use is given back.
+- **Edit before confirm:**
+  - change the name, phone, address and area; the zone is checked again
+  - add products (search by name or SKU), remove them or change quantities
+  - change the discount and the delivery charge; the page suggests the area's charge
+  - the totals and COD fee are worked out again; an advance already sent is kept, and the page warns
+    if it's now more than the total
+  - items already on the order keep the price they were ordered at
+  - held stock follows the new quantities
+  - each change is written in the order's history in words, with your name
+- **Bulk actions** on the list: tick orders, then Confirm or Cancel (one reason for all). Bulk confirm
+  skips orders with an advance to check and lists them with the reason.
+- **Two people on one order:** every action checks the order hasn't changed since the page was opened.
+  If it has, nothing is saved and the page says "Someone else changed this order a moment ago. Reload
+  the page to see it."
+- Every action goes to the audit log.
+- **Found and fixed while testing:**
+  - bulk confirm crashed the page. The list of orders wasn't passed to the database the safe way. Now
+    it is, and a failure shows as a message instead.
+  - on a 1024 px screen the order page was cramped. It now shows two columns only on wider screens.
+  - the running dev server kept an old copy of the order format and dropped new fields. It now picks up
+    changes to the order format without a restart.
+- Checked in the browser with 5 test orders:
+  - tabs, counts, search, filters and the menu badge
+  - call log and notes
+  - confirm: stock taken out, movement recorded, SMS queued
+  - bulk confirm skipped the advance order; confirming it alone needed the tick
+  - edit: Bogura address, new items and ৳130 delivery; history, totals and held stock all right
+  - a second tab put an order on hold; the first tab's cancel was refused with the message above
+  - cancel with "Other" needed a note and gave the held stock back
+  - bulk cancel
+  - CSV export
+  - phone size
+- **Cleanup:** removed the 5 test orders, their stock movements, SMS jobs and 12 audit entries. The
+  chopper's stock, held count and every other field are back exactly as before.
+- 16 new tests (249 total); lint, types, formatting and the production build pass.
+- Committed.
+
+**Next:** Phase 2.10 — order state machine with a separate payment status, enforced on the server.
 
 ### 2026-11-21 · Phase 2.8 — Risk score, blocked numbers, order rules
 

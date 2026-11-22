@@ -1,5 +1,6 @@
 import mongoose, { Schema, type Model } from "mongoose";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "./orders";
+import { CALL_OUTCOMES } from "./staff";
 
 /**
  * Orders (SRS §7 "orders"). Written by place.ts in one transaction with the stock reservation; read
@@ -28,7 +29,54 @@ const historySchema = new Schema(
     status: { type: String, enum: ORDER_STATUSES, required: true },
     at: { type: Date, required: true },
     by: { type: String, default: null },
+    byName: { type: String, default: "" },
     note: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+/** Payment status changes, kept apart from the order's (FR-OR-02). */
+const paymentHistorySchema = new Schema(
+  {
+    status: { type: String, enum: PAYMENT_STATUSES, required: true },
+    at: { type: Date, required: true },
+    by: { type: String, default: null },
+    byName: { type: String, default: "" },
+    note: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+/** Staff calls to the customer (FR-OR-09). */
+const callSchema = new Schema(
+  {
+    outcome: { type: String, enum: CALL_OUTCOMES, required: true },
+    note: { type: String, default: "" },
+    at: { type: Date, required: true },
+    by: { type: String, required: true },
+    byName: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+const noteSchema = new Schema(
+  {
+    text: { type: String, required: true },
+    at: { type: Date, required: true },
+    by: { type: String, required: true },
+    byName: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+/** Staff changes before confirmation, in words (FR-OR-08). The audit log keeps before/after too. */
+const editSchema = new Schema(
+  {
+    changes: { type: [String], default: [] },
+    reason: { type: String, default: "" },
+    at: { type: Date, required: true },
+    by: { type: String, required: true },
+    byName: { type: String, default: "" },
   },
   { _id: false },
 );
@@ -74,8 +122,10 @@ const orderSchema = new Schema(
           senderNumber: String,
           trxId: String,
           amount: Number,
-          status: { type: String, default: "pending" },
+          /** pending → verified, or not_found when it never arrived. */
+          status: { type: String, enum: ["pending", "verified", "not_found"], default: "pending" },
           verifiedBy: { type: String, default: null },
+          verifiedByName: { type: String, default: "" },
           verifiedAt: { type: Date, default: null },
         },
         { _id: false },
@@ -84,18 +134,48 @@ const orderSchema = new Schema(
     },
     codAmount: { type: Number, required: true },
     paymentStatus: { type: String, enum: PAYMENT_STATUSES, required: true },
+    paymentHistory: { type: [paymentHistorySchema], default: [] },
+    /** What the courier collected at the door (delivered or partly delivered). */
+    codCollected: { type: Number, default: 0, min: 0 },
+    refund: {
+      type: new Schema(
+        {
+          amount: { type: Number, required: true, min: 0 },
+          note: { type: String, default: "" },
+          at: { type: Date, required: true },
+          by: { type: String, required: true },
+          byName: { type: String, default: "" },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
     status: { type: String, enum: ORDER_STATUSES, required: true },
     statusHistory: { type: [historySchema], default: [] },
     reservation: {
       active: { type: Boolean, default: true },
       until: { type: Date, required: true },
       releasedAt: { type: Date, default: null },
+      /** Confirmed: the held units left the stock for good. */
+      committedAt: { type: Date, default: null },
     },
     riskScore: { type: Number, default: 0 },
     riskLevel: { type: String, enum: ["low", "medium", "high"], default: "low" },
     riskReasons: { type: [String], default: [] },
-    callLog: { type: [Schema.Types.Mixed], default: [] },
-    notes: { type: [Schema.Types.Mixed], default: [] },
+    callLog: { type: [callSchema], default: [] },
+    notes: { type: [noteSchema], default: [] },
+    edits: { type: [editSchema], default: [] },
+    confirmedAt: { type: Date, default: null },
+    confirmedBy: { type: String, default: null },
+    cancelReason: { type: String, default: "" },
+    returnReason: { type: String, default: "" },
+    /** Partly delivered: the units that came back (they went back into stock). */
+    returnedItems: {
+      type: [new Schema({ variantId: String, qty: Number }, { _id: false })],
+      default: [],
+    },
+    /** Goes up with every staff change: a change based on an older copy is refused. */
+    rev: { type: Number, default: 0 },
     source: { type: String, default: "web" },
     utm: { type: Schema.Types.Mixed, default: null },
     courier: { type: Schema.Types.Mixed, default: null },
@@ -118,10 +198,13 @@ orderSchema.index(
   { unique: true, partialFilterExpression: { "advance.trxId": { $type: "string" } } },
 );
 orderSchema.index({ couponCode: 1 }, { partialFilterExpression: { couponCode: { $type: "string" } } });
+orderSchema.index({ zoneId: 1, createdAt: -1 });
 // Pending orders whose stock hold has run out (FR-CO-07).
 orderSchema.index({ "reservation.until": 1 }, { partialFilterExpression: { "reservation.active": true } });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- writes go through place.ts, reads mapped by hand
 type LooseModel = Model<any>;
-export const Order: LooseModel =
-  (mongoose.models.Order as LooseModel | undefined) ?? (mongoose.model("Order", orderSchema) as unknown as LooseModel);
+// Registered again when this file reloads in development, so a schema change applies without a restart
+// (a model kept from before would quietly drop new fields).
+if (mongoose.models.Order) mongoose.deleteModel("Order");
+export const Order: LooseModel = mongoose.model("Order", orderSchema) as unknown as LooseModel;

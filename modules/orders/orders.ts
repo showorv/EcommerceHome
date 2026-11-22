@@ -8,7 +8,7 @@ import type { Risk, RiskLevel } from "./risk";
  * the words shown about it. Saving it (with the stock reservation) is in place.ts. Money is poisha.
  */
 
-// ---------- Statuses (FR-OR-01, FR-OR-02; the allowed moves between them arrive in 2.10) ----------
+// ---------- Statuses (FR-OR-01, FR-OR-02; the allowed moves between them are in lifecycle.ts) ----------
 
 export const ORDER_STATUSES = [
   "pending",

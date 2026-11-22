@@ -7,8 +7,8 @@ import { Order } from "./models";
 
 /**
  * Stock held by orders that weren't confirmed in time goes back on sale (FR-CO-07). The worker runs
- * this every few minutes. The order itself stays where it is (staff can still confirm it; confirming
- * holds the stock again, 2.10); its history says the hold ended. Not marked server-only: worker code.
+ * this every few minutes. The order itself stays where it is (staff can still confirm it: confirming
+ * takes the units then, if they are still free); its history says the hold ended. Not marked server-only: worker code.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lean docs are mapped field by field

@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   "orders.confirm",
   "orders.cancel",
   "orders.export",
+  "orders.refund",
   "customers.view",
   "customers.block",
   "products.view",
@@ -48,6 +49,7 @@ const STAFF: Permission[] = [
 const MANAGER: Permission[] = [
   ...STAFF,
   "orders.export",
+  "orders.refund",
   "customers.block",
   "products.edit",
   "products.delete",

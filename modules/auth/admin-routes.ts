@@ -6,6 +6,8 @@ import type { Permission } from "./rbac";
  * Longest prefix wins.
  */
 export const ADMIN_ROUTE_PERMISSIONS: { prefix: string; permission: Permission }[] = [
+  { prefix: "/admin/orders", permission: "orders.view" },
+  { prefix: "/admin/orders/export", permission: "orders.export" },
   { prefix: "/admin/products", permission: "products.view" },
   { prefix: "/admin/products/new", permission: "products.edit" },
   { prefix: "/admin/collections/new", permission: "products.edit" },
