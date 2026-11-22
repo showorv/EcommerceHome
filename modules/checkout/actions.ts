@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { formatTaka } from "@/lib/money";
 import { logger } from "@/lib/logger";
@@ -24,6 +25,7 @@ import { getPaymentConfig } from "@/modules/payments/data";
 import { rememberReceipt } from "@/modules/orders/data";
 import { normalizeOrderKey } from "@/modules/orders/orders";
 import { findPlacedOrder, placeOrder } from "@/modules/orders/place";
+import { queuePurchaseEvent } from "@/modules/analytics/capi";
 import { zoneForArea, type CheckoutField, type CheckoutTotals } from "./checkout";
 import { checkCheckout } from "./data";
 import { CHECKOUT_OTP_PURPOSE, isCheckoutPhoneVerified, rememberVerifiedPhone } from "./phone";
@@ -101,6 +103,25 @@ export async function submitCheckoutAction(
       };
     }
     await rememberReceipt(placed.order.id);
+    // The same purchase from the server too (Meta Conversions API), matched to the browser's by order number.
+    const jar = await cookies();
+    await queuePurchaseEvent({
+      orderNo: placed.order.orderNo,
+      placedAt: new Date(),
+      total: placed.order.total,
+      items: res.cart.lines
+        .filter((l) => l.problem === null)
+        .map((l) => ({ id: l.productId, name: l.title, price: l.price, qty: l.qty })),
+      url: `${env().APP_URL}/checkout`,
+      user: {
+        phone: res.input.phone,
+        email: res.input.email,
+        ip,
+        userAgent,
+        fbp: jar.get("_fbp")?.value ?? null,
+        fbc: jar.get("_fbc")?.value ?? null,
+      },
+    });
     if (session && meta.saveAddress === true) {
       // "Save this address" (FR-AC-06). Never stops the order.
       await saveCheckoutAddress(session.user.id, { ...res.input, area: res.area }).catch((err) =>

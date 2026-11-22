@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { track } from "@/components/store/analytics/pixels";
 import { reorderAction } from "@/modules/account/actions";
 import { addToCartAction, loadCartAction, setCartQtyAction, type CartResult } from "@/modules/cart/actions";
 import { EMPTY_CART, type CartView } from "@/modules/cart/view";
@@ -154,6 +155,16 @@ export async function addToCart(
 ): Promise<boolean> {
   const res = await run("add", () => addToCartAction({ ...target, qty }));
   if (!res.ok) return false;
+  const line = res.cart.lines.find((l) =>
+    "variantId" in target ? l.variantId === target.variantId : l.productId === target.productId,
+  );
+  if (line) {
+    track({
+      name: "add_to_cart",
+      value: line.price * qty,
+      items: [{ id: line.productId, name: line.title, price: line.price, qty }],
+    });
+  }
   if (!opts.silent) {
     set({ open: true });
     if (res.message && !res.message.endsWith("added to your cart.")) toast.info(res.message);

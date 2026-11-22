@@ -18,6 +18,7 @@ export const TAGS = {
   cmsPages: "cmsPages", // the list of published CMS pages
   delivery: "delivery", // zones, areas and delivery rules (checkout, delivery preview)
   payments: "payments", // receiving bKash / Nagad wallets (checkout)
+  analytics: "analytics", // tracking IDs in every store page (Meta, GA4, TikTok)
 } as const;
 
 const FIXED_TAGS = new Set<string>([
@@ -28,6 +29,7 @@ const FIXED_TAGS = new Set<string>([
   TAGS.cmsPages,
   TAGS.delivery,
   TAGS.payments,
+  TAGS.analytics,
 ]);
 const KEYED_TAG = /^(product|category|collection|page|cmsPage):[a-z0-9][a-z0-9-]{0,199}$/;
 
@@ -36,7 +38,7 @@ export const isStoreTag = (tag: string) => FIXED_TAGS.has(tag) || KEYED_TAG.test
 
 /** The store page each tag stands for (to visit it once after a change), or null. */
 export function pathForTag(tag: string): string | null {
-  if (tag === TAGS.productLists || tag === TAGS.design || tag === TAGS.navigation) return "/";
+  if (tag === TAGS.productLists || tag === TAGS.design || tag === TAGS.navigation || tag === TAGS.analytics) return "/";
   const [kind, slug] = tag.split(":");
   if (!slug) return null;
   if (kind === "product") return `/p/${slug}`;

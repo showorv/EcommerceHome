@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
+import { TrackEvent } from "@/components/store/analytics/tracker";
 import { Button } from "@/components/ui/button";
 import { formatTaka } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,15 @@ function OrderReceipt({ order: o }: { order: ReceiptView }) {
   const days = o.minDays === o.maxDays ? `${o.minDays}` : `${o.minDays}–${o.maxDays}`;
   return (
     <div className="grid gap-6">
+      <TrackEvent
+        once={o.orderNo}
+        event={{
+          name: "purchase",
+          orderNo: o.orderNo,
+          value: o.total,
+          items: o.items.map((i) => ({ id: i.productId, name: i.title, price: i.price, qty: i.qty })),
+        }}
+      />
       <header className="grid justify-items-center gap-2 text-center">
         <CheckCircle2 className="text-success size-12" aria-hidden />
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Thank you, {o.name.split(" ")[0]}!</h1>

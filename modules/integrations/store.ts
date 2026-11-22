@@ -159,6 +159,27 @@ export async function storageSettings(): Promise<StorageSettings> {
   };
 }
 
+/** Tracking IDs and the Conversions API key, saved in admin only (FR-AD-13). Off until chosen there. */
+export type AnalyticsSettings = {
+  metaPixelId: string | null;
+  metaCapiToken: string | null;
+  metaTestCode: string | null;
+  ga4Id: string | null;
+  tiktokPixelId: string | null;
+};
+
+export async function analyticsSettings(): Promise<AnalyticsSettings> {
+  const s = (await loadAll()).analytics;
+  const v = s.source === "admin" ? s.values : {};
+  return {
+    metaPixelId: v.metaPixelId || null,
+    metaCapiToken: s.source === "admin" && v.metaPixelId ? open("analytics", s, "metaCapiToken") : null,
+    metaTestCode: v.metaTestCode || null,
+    ga4Id: v.ga4Id?.toUpperCase() || null,
+    tiktokPixelId: v.tiktokPixelId?.toUpperCase() || null,
+  };
+}
+
 // ---------- The admin page ----------
 
 const shown = (v: string | null | undefined) => (v ? maskValue(v) : "not set");
@@ -185,6 +206,7 @@ function envSummary(id: IntegrationId): { label: string; value: string }[] {
           ]),
     ];
   if (id === "courier") return [{ label: "Steadfast", value: "no environment variables: save the keys here" }];
+  if (id === "analytics") return [{ label: "Tracking", value: "off: save the IDs here" }];
   return [
     { label: "Cloud name", value: e.CLOUDINARY_CLOUD_NAME || "not set" },
     { label: "API secret", value: shown(e.CLOUDINARY_API_SECRET) },

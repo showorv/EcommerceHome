@@ -3,6 +3,8 @@
 import { refresh } from "next/cache";
 import { logger } from "@/lib/logger";
 import { writeAudit } from "@/modules/audit/audit";
+import { TAGS } from "@/modules/catalog/cache-tags";
+import { refreshTags } from "@/modules/catalog/store-refresh";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { defOf, integrationInput } from "./integrations";
 import { saveIntegration } from "./store";
@@ -30,6 +32,8 @@ export async function saveIntegrationAction(raw: unknown): Promise<IntegrationRe
       after: res.after,
       ...(await requestMeta()),
     });
+    // Tracking IDs are in every store page: those pages are rebuilt with the new ones.
+    if (parsed.data.id === "analytics") refreshTags([TAGS.analytics]);
     refresh();
     return { ok: true, message: `${defOf(parsed.data.id).title} settings saved.` };
   } catch (err) {

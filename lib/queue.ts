@@ -63,7 +63,11 @@ export const OTP_JOB_OPTIONS = {
 export const isOtpPurpose = (purpose: string) => /(^|_)otp$/.test(purpose);
 
 /** Jobs on the orders queue. */
-export const ORDER_JOBS = { releaseReservations: "release-reservations", invoicePdf: "invoice-pdf" } as const;
+export const ORDER_JOBS = {
+  releaseReservations: "release-reservations",
+  invoicePdf: "invoice-pdf",
+  metaEvent: "meta-event",
+} as const;
 
 /** Prints an invoice's PDF in the worker (FR-OR-03), so it is ready before anyone opens the link. */
 export function enqueueInvoicePdf(invoiceId: string) {
@@ -73,4 +77,26 @@ export function enqueueInvoicePdf(invoiceId: string) {
 export function enqueueNotification(job: NotificationJob) {
   const opts = isOtpPurpose(job.purpose) ? OTP_JOB_OPTIONS : undefined;
   return getQueue(QUEUE_NAMES.notifications).add(job.kind, job, opts);
+}
+
+/**
+ * One server-side event for Meta's Conversions API (FR-AD-13), sent by the worker. Customer details
+ * are already hashed (SHA-256) when queued; the access key is read by the worker, never queued.
+ */
+export type MetaEventJob = {
+  eventName: string;
+  eventId: string;
+  /** Seconds since 1970. */
+  eventTime: number;
+  eventSourceUrl: string;
+  userData: Record<string, string | string[]>;
+  customData: Record<string, unknown>;
+};
+
+export function enqueueMetaEvent(job: MetaEventJob) {
+  return getQueue(QUEUE_NAMES.orders).add(ORDER_JOBS.metaEvent, job, {
+    attempts: 5,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: { age: 24 * 3600 },
+  });
 }

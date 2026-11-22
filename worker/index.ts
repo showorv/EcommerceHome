@@ -2,8 +2,9 @@ import "./load-env";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { getQueue, ORDER_JOBS, QUEUE_NAMES, type NotificationJob } from "@/lib/queue";
+import { getQueue, ORDER_JOBS, QUEUE_NAMES, type MetaEventJob, type NotificationJob } from "@/lib/queue";
 import { bullConnection } from "@/lib/redis";
+import { MetaSendError, sendMetaEvent } from "@/modules/analytics/capi";
 import { productTags, scopeOfProducts } from "@/modules/catalog/product-tags";
 import { ensureInvoicePdf } from "@/modules/invoices/pdf";
 import { loadBrand } from "@/modules/notifications/brand";
@@ -17,7 +18,7 @@ import { revalidateStore } from "./revalidate";
 /**
  * Background worker (SRS §6.1). Run with `pnpm worker`.
  * Queues: notifications (SMS + email) and orders (scheduled: stock held by orders not confirmed in
- * time goes back on sale, FR-CO-07; and invoice PDFs, FR-OR-03). Later phases add courier booking and
+ * time goes back on sale, FR-CO-07; invoice PDFs, FR-OR-03; and Meta Conversions API events, FR-AD-13). Later phases add courier booking and
  * image work.
  */
 env(); // fail fast on bad configuration
@@ -65,6 +66,14 @@ async function handleOrders(job: Job) {
     const res = await ensureInvoicePdf(id);
     if (!res) throw new UnrecoverableError(`Invoice ${id} not found`);
     return { invoiceNo: res.invoiceNo, bytes: res.pdf.length };
+  }
+  if (job.name === ORDER_JOBS.metaEvent) {
+    try {
+      return await sendMetaEvent(job.data as MetaEventJob);
+    } catch (err) {
+      if (err instanceof MetaSendError && err.permanent) throw new UnrecoverableError(err.message);
+      throw err;
+    }
   }
   if (job.name !== RELEASE_JOB) throw new UnrecoverableError(`Unknown orders job: ${job.name}`);
   const res = await releaseExpiredReservations();

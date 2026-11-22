@@ -41,6 +41,7 @@ import { AdvancePayment } from "./advance-payment";
 import { CouponBox } from "./coupon-box";
 import { PhoneCodeDialog, type CodeSent } from "./phone-code-dialog";
 import { DRAFT_KEY } from "./draft";
+import { track } from "@/components/store/analytics/pixels";
 
 /**
  * Single-page checkout (FR-CO-02, SRS §2.2): the form on the left, an order summary that updates as the
@@ -120,6 +121,18 @@ export function CheckoutView({ config, wallets }: { config: DeliveryData; wallet
   const orderKey = useRef<string | null>(null);
   const [codeStep, setCodeStep] = useState<{ phone: string; sent: CodeSent; sentAt: number } | null>(null);
   const now = useMinuteClock();
+
+  // "Started checkout" for the marketing pixels, once the cart is known (FR-AD-13).
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (!synced || checkoutTracked.current || cart.lines.length === 0) return;
+    checkoutTracked.current = true;
+    track({
+      name: "begin_checkout",
+      value: cart.subtotal,
+      items: cart.lines.map((l) => ({ id: l.productId, name: l.title, price: l.price, qty: l.qty })),
+    });
+  }, [synced, cart]);
 
   useEffect(() => {
     try {

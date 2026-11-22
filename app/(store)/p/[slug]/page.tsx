@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { TrackEvent } from "@/components/store/analytics/tracker";
 import { Breadcrumbs } from "@/components/store/breadcrumbs";
 import { ProductBlocks, SpecsTable } from "@/components/store/product-blocks";
 import { ProductDetail } from "@/components/store/product-detail";
@@ -68,6 +69,13 @@ export default async function ProductPage({ params }: PageProps<"/p/[slug]">) {
       />
 
       <Breadcrumbs crumbs={crumbs} />
+      <TrackEvent
+        event={{
+          name: "view_item",
+          value: Math.min(...p.variants.map((v) => v.price)),
+          items: [{ id: p.id, name: p.title.en, price: Math.min(...p.variants.map((v) => v.price)), qty: 1 }],
+        }}
+      />
 
       <ProductDetail product={p} />
 

@@ -131,7 +131,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 3.2 Load test with k6: 500 concurrent users, 20 orders/min for 10 min
 - [x] 3.3 Core Web Vitals pass on mobile (LCP ≤ 2.5 s, CLS ≤ 0.1)
 - [x] 3.4 SEO: sitemap, robots, structured data, OG images (NFR-UX-01)
-- [ ] 3.5 Analytics: Meta Pixel + Conversions API, GA4, TikTok (FR-AD-13)
+- [x] 3.5 Analytics: Meta Pixel + Conversions API, GA4, TikTok (FR-AD-13)
 - [ ] 3.6 Production deploy: VPS + Docker Compose behind Cloudflare, Sentry, uptime alerts, logs (NFR-AV-*)
 - [ ] 3.7 Backups (daily, 30 days) + restore test on staging (NFR-SEC-19)
 - [ ] 3.8 Real data entry + full acceptance run (SRS §9.1) + staff training
@@ -302,6 +302,43 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-23 · Phase 3.5 — Analytics: Meta Pixel + Conversions API, GA4, TikTok
+
+- **Admin → Integrations → Marketing & analytics** (owner only): the Meta Pixel ID, Meta Conversions
+  API access token (stored encrypted, shown masked), an optional Meta test event code, the Google
+  Analytics 4 measurement ID and the TikTok Pixel ID. Use any of them; it is **Off** until you
+  choose "Use the keys saved here". Saving rebuilds the store pages with the new IDs.
+- **In the shop:** the pixels load after the page is interactive (SRS §8.7) and get:
+  - a page view on every page, also when moving between pages without a reload;
+  - **ViewContent** on a product page, **AddToCart**, **InitiateCheckout** on checkout, and
+    **Purchase** on the thank-you page (with the order number; a reload doesn't count it twice).
+  - GA4 gets its own names (`view_item`, `add_to_cart`, `begin_checkout`, `purchase` with the order
+    number as `transaction_id`); TikTok gets `CompletePayment` for orders. Amounts are in taka (BDT).
+  - Not on admin pages, draft previews or invoice links.
+- **Meta Conversions API:** every website order is also sent from the server through the worker, so
+  it counts even when an ad blocker stops the browser pixel. It carries the same event id as the
+  browser's Purchase, so Meta counts it once. The phone and email are hashed (SHA-256) before they
+  leave the shop; the access token never goes into the queue. A bad token stops at once (shown in
+  the worker's failed jobs); network problems are retried. Manual orders are not sent (they didn't
+  come from an ad click on the website).
+- The storefront security policy now allows the three services' scripts and connections.
+- **Checked** in Chrome with test IDs and every request to Meta, Google and TikTok blocked (nothing
+  left this computer): all three pixels start, page views, product view, add to cart and checkout
+  reach each in its own format, no security-policy errors. The Conversions API was tested against a
+  pretend Meta server only. Test data removed (2 guest carts and the test IDs).
+- **When you set it up:** put the Meta test event code in, place a test order, and check it shows
+  in Events Manager → Test events as one Purchase marked "Browser and server" (deduplicated); then
+  remove the code and cancel the order.
+- **Not done:** the Facebook/Instagram product catalogue feed (§8.7) and a cookie consent banner
+  (not required in Bangladesh today; add one before selling to the EU).
+- **Not from these tests:** a sign-in to the owner account at 01:57 and a customer's cart with 2
+  choppers (created 01:52) appeared in the database; I left them as they are.
+- 8 new tests (350 total); lint, types, formatting and the production build pass.
+- Not committed yet.
+
+**Next:** Phase 3.6 — production deploy: VPS + Docker Compose behind Cloudflare, Sentry, uptime
+alerts, logs.
+
 ### 2026-11-23 · Phase 3.4 — SEO: sitemap, robots, structured data, share images
 
 - Already in place from earlier steps: server-rendered pages, clean addresses (`/p/…`, `/c/…`), a
@@ -324,7 +361,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - 6 new tests (342 total); lint, types, formatting and the production build pass.
 - **For 3.8:** after launch, add the sitemap in Google Search Console and check the product pages
   with Google's Rich Results Test.
-- Not committed yet.
+- Committed and pushed (ae42319).
 
 **Next:** Phase 3.5 — Analytics: Meta Pixel + Conversions API, GA4, TikTok.
 

@@ -30,7 +30,7 @@ export function IntegrationCard({ view }: { view: IntegrationView }) {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [clear, setClear] = useState<string[]>([]);
   const [pending, start] = useTransition();
-  const envOnly = view.id === "courier"; // no environment variables exist for it
+  const envOnly = view.id === "courier" || view.id === "analytics"; // no environment variables exist for them
   const name = `int-${view.id}`;
 
   function save() {

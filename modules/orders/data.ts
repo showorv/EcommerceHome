@@ -33,7 +33,15 @@ export type ReceiptView = {
   name: string;
   phone: string;
   address: string;
-  items: { title: string; variantTitle: string; qty: number; price: number; image: string | null; slug: string }[];
+  items: {
+    productId: string;
+    title: string;
+    variantTitle: string;
+    qty: number;
+    price: number;
+    image: string | null;
+    slug: string;
+  }[];
   subtotal: number;
   discount: number;
   couponCode: string | null;
@@ -64,6 +72,7 @@ export async function getReceiptOrder(): Promise<ReceiptView | null> {
     phone: String(d.customer?.phone ?? ""),
     address: [a.line, a.area, a.district].filter(Boolean).join(", "),
     items: ((d.items ?? []) as AnyDoc[]).map((i) => ({
+      productId: String(i.productId ?? ""),
       title: String(i.title),
       variantTitle: String(i.variantTitle ?? ""),
       qty: Number(i.qty),

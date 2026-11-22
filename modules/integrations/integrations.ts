@@ -9,7 +9,7 @@ import { z } from "zod";
  * fields are stored encrypted (AES-256-GCM, lib/crypto.ts) and only ever sent back to the browser masked.
  */
 
-export const INTEGRATIONS = ["sms", "email", "courier", "storage"] as const;
+export const INTEGRATIONS = ["sms", "email", "courier", "storage", "analytics"] as const;
 export type IntegrationId = (typeof INTEGRATIONS)[number];
 
 export const SOURCES = ["env", "admin"] as const;
@@ -108,6 +108,34 @@ export const INTEGRATION_DEFS: readonly IntegrationDef[] = [
       { key: "cloudName", label: "Cloud name" },
       { key: "apiKey", label: "API key" },
       { key: "apiSecret", label: "API secret", secret: true },
+    ],
+  },
+  {
+    id: "analytics",
+    title: "Marketing & analytics",
+    description:
+      "Meta (Facebook/Instagram) Pixel with the Conversions API, Google Analytics 4 and TikTok Pixel (FR-AD-13). Leave out any you don't use.",
+    fields: [
+      {
+        key: "metaPixelId",
+        label: "Meta Pixel ID",
+        placeholder: "123456789012345",
+        help: "Events Manager → Data sources.",
+      },
+      {
+        key: "metaCapiToken",
+        label: "Meta Conversions API access token",
+        secret: true,
+        help: "Events Manager → your pixel → Settings → Generate access token. Sends orders from the server too.",
+      },
+      {
+        key: "metaTestCode",
+        label: "Meta test event code",
+        placeholder: "TEST12345",
+        help: "Only while testing in Events Manager → Test events. Remove it afterwards.",
+      },
+      { key: "ga4Id", label: "Google Analytics 4 measurement ID", placeholder: "G-XXXXXXXXXX" },
+      { key: "tiktokPixelId", label: "TikTok Pixel ID", placeholder: "CXXXXXXXXXXXXXXXXXXX" },
     ],
   },
 ];
@@ -217,6 +245,17 @@ export function checkIntegration(
   if (id === "courier") {
     if (Boolean(hasSecret.steadfastApiKey) !== Boolean(hasSecret.steadfastSecretKey))
       return "Steadfast needs both the API key and the secret key.";
+    return null;
+  }
+  if (id === "analytics") {
+    if (values.metaPixelId && !/^\d{10,20}$/.test(values.metaPixelId)) return "Meta Pixel ID: 10–20 digits.";
+    if (hasSecret.metaCapiToken && !values.metaPixelId) return "The Conversions API token needs the Meta Pixel ID.";
+    if (values.metaTestCode && !/^TEST[A-Z0-9]{1,20}$/i.test(values.metaTestCode))
+      return 'Meta test event code: starts with "TEST", like TEST12345.';
+    if (values.ga4Id && !/^G-[A-Z0-9]{4,15}$/i.test(values.ga4Id)) return "GA4 measurement ID: like G-XXXXXXXXXX.";
+    if (values.tiktokPixelId && !/^[A-Z0-9]{10,30}$/i.test(values.tiktokPixelId))
+      return "TikTok Pixel ID: 10–30 letters and digits.";
+    if (!values.metaPixelId && !values.ga4Id && !values.tiktokPixelId) return "Add at least one ID, or choose Off.";
     return null;
   }
   // storage
