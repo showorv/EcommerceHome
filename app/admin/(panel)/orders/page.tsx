@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/admin/catalog/form-bits";
@@ -43,13 +43,22 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
         title="Orders"
         description="Call each new order and check any advance, then confirm it. Pack, ship and mark delivered from the tabs."
         actions={
-          permissions.has("orders.export") && (
-            <Button asChild variant="outline">
-              <a href={`/admin/orders/export${orderFiltersQuery(f)}`} download>
-                <Download className="size-4" aria-hidden /> Export CSV
-              </a>
-            </Button>
-          )
+          <>
+            {permissions.has("orders.export") && (
+              <Button asChild variant="outline">
+                <a href={`/admin/orders/export${orderFiltersQuery(f)}`} download>
+                  <Download className="size-4" aria-hidden /> Export CSV
+                </a>
+              </Button>
+            )}
+            {permissions.has("orders.create") && (
+              <Button asChild>
+                <Link href="/admin/orders/new">
+                  <Plus className="size-4" aria-hidden /> New order
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 

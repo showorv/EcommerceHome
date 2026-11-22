@@ -22,7 +22,13 @@ import { adminInvoice } from "@/modules/invoices/data";
 import { orderNotifications } from "@/modules/notifications/data";
 import { getAdminOrder, phoneSummary, requestTime } from "@/modules/orders/admin-data";
 import { canRefund, moneyIn } from "@/modules/orders/lifecycle";
-import { isOrderNo, ORDER_STATUS_NAMES, PAYMENT_STATUS_NAMES, type OrderStatus } from "@/modules/orders/orders";
+import {
+  isOrderNo,
+  ORDER_SOURCE_NAMES,
+  ORDER_STATUS_NAMES,
+  PAYMENT_STATUS_NAMES,
+  type OrderStatus,
+} from "@/modules/orders/orders";
 import { canEdit } from "@/modules/orders/staff";
 import { WALLET_NAMES } from "@/modules/payments/payments";
 
@@ -95,6 +101,7 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
               <h1 className="text-2xl font-bold tracking-tight">{order.orderNo}</h1>
               <StatusBadge status={order.status} />
               <PaymentBadge status={order.paymentStatus} />
+              {order.source !== "web" && <Badge variant="outline">From {ORDER_SOURCE_NAMES[order.source]}</Badge>}
               <RiskBadge level={order.risk.level} score={order.risk.score} />
             </div>
             <p className="text-muted-foreground text-sm">Placed {dhakaTime(order.createdAt, now)}</p>

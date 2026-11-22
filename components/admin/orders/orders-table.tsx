@@ -22,7 +22,8 @@ import { formatTaka } from "@/lib/money";
 import { PAYMENT_METHOD_NAMES } from "@/modules/checkout/checkout";
 import { bulkCancelAction, bulkConfirmAction, bulkMoveAction, type BulkResult } from "@/modules/orders/admin-actions";
 import { canMove } from "@/modules/orders/lifecycle";
-import type { OrderStatus } from "@/modules/orders/orders";
+import { ORDER_SOURCE_NAMES, type OrderStatus } from "@/modules/orders/orders";
+import { Badge } from "@/components/ui/badge";
 import { CALL_OUTCOME_NAMES, CANCEL_REASONS, type OrderRow } from "@/modules/orders/staff";
 import { ago, dhakaTime, PaymentBadge, RiskBadge, showPhone, StatusBadge, telHref } from "./bits";
 
@@ -194,6 +195,11 @@ export function OrdersTable({
                   <Link href={`/admin/orders/${r.orderNo}`} className="font-medium hover:underline">
                     {r.orderNo}
                   </Link>
+                  {r.source !== "web" && (
+                    <Badge variant="outline" className="ml-1.5 align-middle text-[10px]">
+                      {ORDER_SOURCE_NAMES[r.source]}
+                    </Badge>
+                  )}
                   <div className="text-muted-foreground text-xs">
                     {r.status === "pending" ? `Waiting ${ago(r.createdAt, now)}` : dhakaTime(r.createdAt, now)}
                   </div>

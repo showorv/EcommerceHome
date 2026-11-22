@@ -66,7 +66,7 @@ export async function findPlacedOrder(owner: string, key: string): Promise<Place
   return d ? placed(d) : null;
 }
 
-async function reservationHours(): Promise<number> {
+export async function reservationHours(): Promise<number> {
   const s = await Setting.findById("orders").lean<AnyDoc>();
   const h = Number(s?.value?.reservationHours);
   return Number.isFinite(h) && h >= 1 && h <= 24 * 14 ? h : DEFAULT_RESERVATION_HOURS;
@@ -234,7 +234,7 @@ export async function placeOrder(input: {
 }
 
 /** Products whose page now shows "Only N left" or "Sold out" for a variant in this order. */
-async function lowStockProducts(variantIds: string[]): Promise<string[]> {
+export async function lowStockProducts(variantIds: string[]): Promise<string[]> {
   const variants = await Variant.find(trustFilter({ _id: { $in: variantIds } }))
     .select("productId stock reserved lowStockAt")
     .lean<AnyDoc[]>();

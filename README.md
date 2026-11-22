@@ -121,7 +121,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
 - [x] 2.15 Customers admin + dashboard (FR-AD-01, FR-AD-06)
 - [x] 2.16 Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13)
-- [ ] 2.17 Manual order form for Facebook/WhatsApp orders (Open question 9)
+- [x] 2.17 Manual order form for Facebook/WhatsApp orders (Open question 9)
 
 **Done when:** all "Ordering and confirmation" acceptance criteria in SRS §9.1 pass.
 
@@ -302,6 +302,37 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-22 · Phase 2.17 — Manual orders from Facebook and WhatsApp
+
+- **Orders → New order** (Open question 9), for staff and up (new permission _orders.create_). For
+  orders taken in a Facebook or WhatsApp chat, on a call, or elsewhere.
+  - Choose where it came from, add products (search by name or SKU, today's prices, how many are
+    free), the customer, district, area and address.
+  - **Amounts:** an optional discount; the delivery charge is the zone's, and staff can type another.
+    The total, COD fee and the amount to collect update as you type.
+  - **Advance already received:** bKash or Nagad, the amount, the sender number and the TrxID. It is
+    checked on the order page like any other advance. A TrxID already on another order is refused.
+  - An optional **note for staff**, saved on the order.
+- The server checks and works out everything again, then saves the order like checkout does: stock
+  held in the same transaction, the next order number, risk score, and the usual "order received"
+  SMS/email. No SMS code is asked for. Blocked numbers are refused. The zone's advance rule is not
+  forced here: staff decide.
+- From there it's an ordinary order: **Pending → Confirm** (with its invoice) → pack → ship. The
+  history says "Taken by <name> from WhatsApp", the order page shows **From WhatsApp**, and the orders
+  list shows a small source badge. Audit log: `order.create_manual`.
+- **Checked in the browser** as a temporary staff member, on a phone-sized screen too: the New order
+  button, an empty form (every field named), a WhatsApp order with a discount and a bKash advance
+  (totals, stock held, history, note, SMS queued, risk), the source badge in the list, and a second
+  order with the same TrxID (refused, nothing saved).
+- **Cleanup:** removed the test order, its message log row and queued SMS, the order number counter,
+  2 audit entries and the temporary staff member. The chopper is back exactly as before.
+- 10 new tests (333 total); lint, types, formatting and the production build pass.
+- **Phase 2 is finished**, apart from 2.13 (Steadfast), which waits for your merchant account. The
+  SRS §9.1 acceptance run is part of 3.8.
+- Not committed yet.
+
+**Next:** Phase 3.1 — Security review: headers scan, OWASP ZAP baseline, dependency scan.
+
 ### 2026-11-22 · Phase 2.16 — Integrations settings with encrypted keys
 
 - **Admin → Integrations** (FR-AD-12), owner only (_integrations.manage_; managers and staff get
@@ -329,7 +360,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Cleanup:** removed the temporary owner, the integrations settings it saved and its 8 audit
   entries. Nothing was uploaded to Cloudinary (only upload signatures were made).
 - 10 new tests (323 total); lint, types, formatting and the production build pass.
-- Not committed yet.
+- Committed and pushed (4eda37c).
 
 **Next:** Phase 2.17 — Manual order form for Facebook/WhatsApp orders (Open question 9).
 

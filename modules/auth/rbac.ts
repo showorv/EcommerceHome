@@ -6,6 +6,7 @@
  */
 export const PERMISSIONS = [
   "orders.view",
+  "orders.create",
   "orders.update",
   "orders.confirm",
   "orders.cancel",
@@ -39,6 +40,7 @@ export const STAFF_ROLES: readonly Role[] = ["staff", "manager", "owner"];
 
 const STAFF: Permission[] = [
   "orders.view",
+  "orders.create",
   "orders.update",
   "orders.confirm",
   "orders.cancel",

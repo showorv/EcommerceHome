@@ -14,6 +14,8 @@ import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { productTags, refreshTags, scopeOfProducts } from "@/modules/catalog/store-refresh";
 import { searchVariants, type VariantOption } from "./admin-data";
 import { bulkMoveInput, moveInput, partialInput, refundInput, returnInput } from "./lifecycle";
+import { manualFieldErrors, manualOrderInput, ORDER_SOURCE_NAMES } from "./manual";
+import { placeManualOrder } from "./manual-place";
 import {
   addCall,
   addNote,
@@ -299,10 +301,62 @@ export async function editOrderAction(raw: unknown): Promise<OrderActionResult> 
 const searchInput = z.string().trim().min(2).max(60);
 
 export async function searchVariantsAction(q: unknown): Promise<VariantOption[]> {
+  // For the order editor (orders.update) and the manual order form (orders.create).
   const s = await staff("orders.update");
-  if ("error" in s) return [];
+  if ("error" in s && "error" in (await staff("orders.create"))) return [];
   const p = searchInput.safeParse(q);
   return p.success ? searchVariants(p.data) : [];
+}
+
+// ---------- Manual orders (Open question 9) ----------
+
+export type ManualOrderResult =
+  | { ok: true; orderNo: string; message: string }
+  | { ok: false; error: string; fields?: Partial<Record<string, string>> };
+
+/**
+ * An order taken in a Facebook or WhatsApp chat or on a call: orders.create → zod → stock held and order
+ * saved (manual-place.ts) → audit. The same form key gives back the same order (double click, retry).
+ */
+export async function createManualOrderAction(raw: unknown): Promise<ManualOrderResult> {
+  const s = await staff("orders.create");
+  if ("error" in s) return { ok: false, error: s.error };
+  const p = manualOrderInput.safeParse(raw);
+  if (!p.success)
+    return { ok: false, error: "Please check the highlighted fields.", fields: manualFieldErrors(p.error) };
+  try {
+    const res = await placeManualOrder(p.data, s.actor);
+    if (!res.ok) return res;
+    if (!res.repeated) {
+      await writeAudit({
+        actor: { id: s.actor.id, email: s.email },
+        action: "order.create_manual",
+        entity: "order",
+        entityId: res.order.id,
+        after: {
+          orderNo: res.order.orderNo,
+          source: p.data.source,
+          customer: { name: p.data.name, phone: p.data.phone },
+          items: p.data.items,
+          discount: p.data.discount,
+          deliveryCharge: p.data.deliveryCharge,
+          advance: p.data.payWallet ? { trxId: p.data.trxId, amount: p.data.advanceAmount } : null,
+          total: res.order.total,
+        },
+        ...s.meta,
+      });
+      await refreshProducts(res.lowStockProductIds);
+    }
+    refresh();
+    return {
+      ok: true,
+      orderNo: res.order.orderNo,
+      message: `${res.order.orderNo} saved (${ORDER_SOURCE_NAMES[p.data.source]}).`,
+    };
+  } catch (err) {
+    logger.error({ err }, "manual order failed");
+    return { ok: false, error: "Something went wrong and the order wasn't saved. Please try again." };
+  }
 }
 
 // ---------- Several orders (FR-AD-05) ----------

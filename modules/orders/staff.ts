@@ -5,7 +5,7 @@ import type { PaymentMethod } from "@/modules/checkout/checkout";
 import type { WalletType } from "@/modules/payments/payments";
 import type { RiskLevel } from "./risk";
 import { canMove } from "./lifecycle";
-import type { OrderItem, OrderStatus, PaymentStatus } from "./orders";
+import type { OrderItem, OrderSource, OrderStatus, PaymentStatus } from "./orders";
 
 /**
  * What staff do with an order (SRS §2.4, FR-OR-08/09, FR-AD-05): call, note, edit, then confirm or
@@ -289,6 +289,7 @@ export type AdminOrder = {
   edits: EditEntry[];
   cancelReason: string;
   ip: string | null;
+  source: OrderSource;
 };
 
 /** One row of the orders list. */
@@ -310,6 +311,7 @@ export type OrderRow = {
   riskScore: number;
   lastCall: { outcome: CallOutcome; at: string } | null;
   holdActive: boolean;
+  source: OrderSource;
 };
 
 // ---------- List filters (FR-AD-05) ----------

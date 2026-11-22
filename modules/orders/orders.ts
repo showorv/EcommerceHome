@@ -44,6 +44,20 @@ export const PAYMENT_STATUS_NAMES: Record<PaymentStatus, string> = {
   refunded: "Refunded",
 };
 
+// ---------- Where an order came from (SRS §7: web / fb / whatsapp / manual) ----------
+
+export const ORDER_SOURCES = ["web", "facebook", "whatsapp", "phone", "other"] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number];
+export const ORDER_SOURCE_NAMES: Record<OrderSource, string> = {
+  web: "Website",
+  facebook: "Facebook",
+  whatsapp: "WhatsApp",
+  phone: "Phone call",
+  other: "Other",
+};
+export const readSource = (v: unknown): OrderSource =>
+  (ORDER_SOURCES as readonly unknown[]).includes(v) ? (v as OrderSource) : "web";
+
 // ---------- Numbers ----------
 
 /** Order numbers look like SR10001 (SRS §2.5). They come from the "orderNo" counter. */
@@ -115,7 +129,7 @@ export type NewOrder = {
   codAmount: number;
   paymentStatus: PaymentStatus;
   status: OrderStatus;
-  statusHistory: { status: OrderStatus; at: Date; by: string | null; note: string }[];
+  statusHistory: { status: OrderStatus; at: Date; by: string | null; byName?: string; note: string }[];
   /** Stock held for this order until it is confirmed, or until `until` passes (FR-CO-07). */
   reservation: { active: boolean; until: Date; releasedAt: Date | null };
   riskScore: number;

@@ -346,7 +346,7 @@ function Money({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ProductSearch({ onAdd }: { onAdd: (v: VariantOption) => void }) {
+export function ProductSearch({ onAdd }: { onAdd: (v: VariantOption) => void }) {
   const [q, setQ] = useState("");
   const [found, setFound] = useState<{ q: string; rows: VariantOption[] } | null>(null);
   const query = q.trim();

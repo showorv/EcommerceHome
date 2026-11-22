@@ -7,7 +7,7 @@ import { Product, Variant } from "@/modules/catalog/models";
 import { blockFor } from "@/modules/customers/data";
 import type { BlockKind } from "@/modules/customers/blocks";
 import { Order } from "./models";
-import { ORDER_STATUSES, type OrderStatus } from "./orders";
+import { ORDER_STATUSES, readSource, type OrderStatus } from "./orders";
 import {
   ORDER_TABS,
   TAB_STATUSES,
@@ -138,6 +138,7 @@ export function toAdminOrder(d: AnyDoc): AdminOrder {
       note: String(h.note ?? ""),
     })),
     ip: d.ip ?? null,
+    source: readSource(d.source),
   };
 }
 
@@ -162,6 +163,7 @@ function toRow(d: AnyDoc): OrderRow {
     riskScore: Number(d.riskScore ?? 0),
     lastCall: last ? { outcome: last.outcome, at: iso(last.at)! } : null,
     holdActive: d.reservation?.active === true,
+    source: readSource(d.source),
   };
 }
 
@@ -213,7 +215,7 @@ export async function listOrders(f: OrderFilters): Promise<{
   const [docs, total, byStatus] = await Promise.all([
     Order.find(trustFilter(filter))
       .select(
-        "orderNo status paymentStatus createdAt customer shippingAddress.area shippingAddress.district zoneName items.qty total paymentMethod advance.status riskLevel riskScore callLog reservation.active",
+        "orderNo status paymentStatus createdAt customer shippingAddress.area shippingAddress.district zoneName items.qty total paymentMethod advance.status riskLevel riskScore callLog reservation.active source",
       )
       .sort(sort)
       .skip((f.page - 1) * PAGE_SIZE)
