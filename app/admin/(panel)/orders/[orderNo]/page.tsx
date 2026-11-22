@@ -17,6 +17,7 @@ import { formatTaka } from "@/lib/money";
 import { requireStaff } from "@/modules/auth/session";
 import { PAYMENT_METHOD_NAMES } from "@/modules/checkout/checkout";
 import { BLOCK_KIND_NAMES } from "@/modules/customers/blocks";
+import { customerHref } from "@/modules/customers/stats";
 import { adminInvoice } from "@/modules/invoices/data";
 import { orderNotifications } from "@/modules/notifications/data";
 import { getAdminOrder, phoneSummary, requestTime } from "@/modules/orders/admin-data";
@@ -238,6 +239,11 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[or
               <div>
                 <div className="font-medium">{order.customer.name}</div>
                 {order.customer.email && <div className="text-muted-foreground">{order.customer.email}</div>}
+                {permissions.has("customers.view") && (
+                  <Link href={customerHref(order.customer.phone)} className="text-xs underline underline-offset-2">
+                    Customer profile
+                  </Link>
+                )}
               </div>
               <Button asChild variant="secondary" className="justify-start">
                 <a href={telHref(order.customer.phone)}>

@@ -119,7 +119,7 @@ Estimates come from the SRS (two part-time developers). Adjust to real availabil
 - [x] 2.12 Email adapter (Resend/SES/Brevo) + React Email templates; editable SMS/email templates; notification log with retry (FR-OR-06/07)
 - [ ] 2.13 Steadfast courier adapter: book single/bulk, tracking code, status polling/webhook (SRS §8.4) — _on hold until you have a Steadfast merchant account; built after that_
 - [x] 2.14 Customer account area: addresses, order history timeline, invoice download, re-order, wishlist; guest order tracking (FR-AC-06/07)
-- [ ] 2.15 Customers admin + dashboard (FR-AD-01, FR-AD-06)
+- [x] 2.15 Customers admin + dashboard (FR-AD-01, FR-AD-06)
 - [ ] 2.16 Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13)
 - [ ] 2.17 Manual order form for Facebook/WhatsApp orders (Open question 9)
 
@@ -302,6 +302,38 @@ http://localhost:3000/admin with your email and password.
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
 
+### 2026-11-22 · Phase 2.15 — Customers admin and dashboard
+
+- **Dashboard** (FR-AD-01) at `/admin`, for **Today · Last 7 days · Last 30 days** (Dhaka time):
+  - **Orders placed** and their value (cancelled left out)
+  - **Confirmation rate:** of the orders staff have decided on, how many were confirmed
+  - **Delivery success** and **Returned (RTO):** of the orders that reached the door in the period,
+    how many were kept (fully or in part) and how many came back. The two add up to 100%.
+  - **Waiting for a call:** pending and on-hold orders, oldest first, with risk and the last call
+  - **Top products** by units, and **Low stock** (variants at or below their low-stock level)
+  - Who sees what: order numbers need _orders.view_, money needs _reports.view_ (manager and up),
+    low stock needs _products.view_. "Your permissions" is now folded away at the bottom.
+- **Customers** (FR-AD-06), a new menu item after Orders (_customers.view_, staff and up):
+  - One row per **mobile number**, guests included: name (and how many other names), orders, open
+    orders, return rate, last order, lifetime value, and Blocked/Flagged and Account badges.
+  - Search by name or number (typed as 017…, 88017… or +88017…); show all, ordered 2+ times, has
+    returns, or blocked/flagged; sort by last order, lifetime value, most orders or most returns.
+  - **Customer page:** call button, lifetime value (delivered and partly delivered orders, less
+    refunds), orders, delivered, return rate, every order with status and payment, names, emails and
+    places used, linked accounts, and **block or flag the number** right there (_customers.block_,
+    manager and up — the same list as Blocked numbers).
+  - The order page links to the **Customer profile**.
+- **Checked in the browser** as a temporary manager, on a phone-sized screen too, with 7 test orders
+  on two test numbers: every dashboard figure for Today and 30 days worked out by hand and matched,
+  list search, filters and sorts, the customer page, flagging a number, the order page link, and an
+  unknown or invalid number (not found).
+- **Cleanup:** removed the 7 test orders, the flag, the temporary manager and its 2 audit entries.
+  Nothing else was touched; the chopper's stock is unchanged.
+- 10 new tests (313 total); lint, types, formatting and the production build pass.
+- Not committed yet.
+
+**Next:** Phase 2.16 — Integrations settings page with encrypted keys (FR-AD-12, NFR-SEC-13).
+
 ### 2026-11-22 · Phase 2.14 — Customer account area and order tracking
 
 - **My account** (FR-AC-06), with tabs Overview · Orders · Addresses · Wishlist · Profile (a scrolling
@@ -351,7 +383,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
   - Changing the **email** address isn't available yet ("please contact us").
   - Docker Desktop had stopped during this step; I started it and this project's containers again.
     The admin page in the app's browser now asks you to sign in again.
-- Not committed yet (2.12 isn't either).
+- Committed and pushed together with 2.12 (fa1aa8f).
 
 **Next:** Phase 2.15 — Customers admin + dashboard (FR-AD-01, FR-AD-06).
 
