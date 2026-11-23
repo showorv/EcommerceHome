@@ -1,7 +1,9 @@
 name: Deploy
 
 # Every push to main that passes CI goes live on the server. Also runnable by hand from the Actions tab.
-# Set-up (server key, GitHub secrets): docs/deploy.md §9. Until DEPLOY_HOST is set this does nothing.
+# Until DEPLOY_HOST is set this does nothing. Secrets: DEPLOY_HOST (server IP), DEPLOY_SSH_KEY (private key
+# whose public half is in the server's authorized_keys as `command="<repo>/deploy/update.sh",restrict ...`),
+# DEPLOY_KNOWN_HOSTS (`ssh-keyscan -t ed25519 <ip>`), optional DEPLOY_USER / DEPLOY_PORT; variable SHOP_URL.
 on:
   workflow_run:
     workflows: [CI]
@@ -32,7 +34,7 @@ jobs:
         id: ready
         run: |
           if [ -z "$DEPLOY_HOST" ]; then
-            echo "::notice::DEPLOY_HOST is not set, so nothing was deployed (see docs/deploy.md §9)."
+            echo "::notice::DEPLOY_HOST is not set, so nothing was deployed."
             echo "go=false" >> "$GITHUB_OUTPUT"
           else
             echo "go=true" >> "$GITHUB_OUTPUT"

@@ -4,7 +4,7 @@
 #
 #   cd deploy && docker compose up -d --build        # first start and every update
 #
-# Settings live in deploy/.env.production (copy env.production.example). See docs/deploy.md.
+# Settings live in deploy/.env.production (copy env.production.example).
 
 name: shop
 

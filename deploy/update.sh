@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Brings the server up to the latest code on the deploy branch and rebuilds the shop.
-# Run by hand (`~/shop/deploy/update.sh`) or by the GitHub "Deploy" workflow over SSH (docs/deploy.md §9).
+# Run by hand (`~/shop/deploy/update.sh`) or by the GitHub "Deploy" workflow over SSH.
 #
 # The whole script sits inside { … } so bash reads it completely before running: `git merge` below may
 # replace this very file.

@@ -348,9 +348,6 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Plan (free):** one Oracle Cloud "Always Free" ARM server (4 CPUs, 24 GB) runs everything in
   Docker; Cloudflare Free in front; MongoDB on the server with the daily off-site backups of 3.7.
   Only the domain costs money (about $10 a year; a free DuckDNS name works until then).
-- **Step-by-step guide: [docs/deploy.md](docs/deploy.md)** — creating the server, opening ports,
-  Docker, the deploy key, Cloudflare, settings, first start, owner account, Sentry, uptime alerts
-  and updating.
 - **Production stack** (`Dockerfile`, `deploy/compose.yml`):
   - **Caddy**: HTTPS certificates (Let's Encrypt, renewed by itself), HTTP → HTTPS, compression,
     HTTP/3. It hands the app the visitor's real address and believes Cloudflare's header only from
@@ -366,7 +363,7 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Sentry error tracking** (free plan) for the server, the worker (jobs that used up their tries)
   and the browser. The browser part downloads Sentry only when an error happens, so pages stay
   light. Reports carry no cookies, form data, IP addresses or query strings. Off without a DSN.
-- **Uptime alerts:** UptimeRobot (free) on `/api/health`, set up from the guide (NFR-AV-01).
+- **Uptime alerts:** UptimeRobot (free) on `/api/health` (NFR-AV-01).
 - **Auto-deploy on push** (`.github/workflows/deploy.yml`, `deploy/update.sh`):
   - When CI passes on `main`, GitHub connects to the server and runs `update.sh`. The script pulls
     the code (fast-forward only), rebuilds, waits for every service to be healthy, then removes old
@@ -375,7 +372,8 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
     can also be run by hand from the Actions tab.
   - The GitHub key can only run that one script (a forced command, `restrict`).
   - The server's own key is pinned, so GitHub won't connect to an impostor.
-  - The workflow does nothing until the `DEPLOY_*` secrets are set; set-up is in docs/deploy.md §9.
+  - The workflow does nothing until the `DEPLOY_*` secrets are set (listed at the top of the
+    workflow file).
   - The script was dry-run here against a throwaway repository, including updating itself mid-run;
     it hasn't run on a real server yet.
 - **Tested on this Mac** with the real production stack in Docker (arm64, like the Oracle server):
@@ -387,8 +385,8 @@ Newest first. Each entry: date · step · what changed · what is left / needed 
 - **Not covered:** zero-downtime deploys and preview environments per pull request (NFR-AV-04).
   Updates rebuild while the old version keeps serving; the switch takes a few seconds.
 - 2 new tests (352 total); lint, types, formatting and the production build pass.
-- **What you need to do:** sign up for Oracle Cloud and follow docs/deploy.md. 3.6 gets its tick
-  once the shop is live on your server.
+- **Who deploys:** Udoy handles the server and the deployment (the step-by-step guide was removed on
+  23 Nov). 3.6 gets its tick once the shop is live.
 - Committed and pushed together with storefront design round 1 (one commit).
 
 **Next:** Phase 3.7 — daily backups kept 30 days, plus a restore test.
