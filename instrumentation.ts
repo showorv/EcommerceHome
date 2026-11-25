@@ -1,10 +1,18 @@
 import type { Instrumentation } from "next";
 
 /**
- * Error tracking on the server (NFR-AV-03): Sentry starts only when SENTRY_DSN is set, and reports
- * errors without personal data (modules/monitoring/scrub.ts).
+ * Runs once when the web server starts:
+ * - creates the first Owner from OWNER_EMAIL / OWNER_PASSWORD when that account doesn't exist yet
+ *   (instrumentation-node.ts);
+ * - starts Sentry error tracking (NFR-AV-03) when SENTRY_DSN is set, reporting errors without
+ *   personal data (modules/monitoring/scrub.ts).
  */
 export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { onNodeStart } = await import("./instrumentation-node");
+    await onNodeStart();
+  }
+
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) return;
   const Sentry = await import("@sentry/nextjs");

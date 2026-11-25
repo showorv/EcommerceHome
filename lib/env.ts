@@ -35,6 +35,11 @@ const schema = z
       .string()
       .refine((v) => Buffer.from(v, "base64").length === 32, "ENCRYPTION_KEY must be base64 of 32 bytes"),
 
+    /** First Owner account, created at start-up when missing (modules/auth/owner-from-env.ts). */
+    OWNER_EMAIL: optional,
+    OWNER_PASSWORD: optional,
+    OWNER_NAME: optional,
+
     GOOGLE_CLIENT_ID: optional,
     GOOGLE_CLIENT_SECRET: optional,
 
