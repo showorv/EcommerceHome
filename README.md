@@ -234,15 +234,22 @@ pnpm dev        # web app → http://localhost:3000
 pnpm worker     # background jobs (emails, SMS). Dev SMS + OTP codes are printed here.
 ```
 
-Create the first owner account (once):
+Create the first owner account (once): put it in `.env.local` (or `.env.production` on the server)
+and start the shop:
 
 ```bash
-pnpm owner:create --email you@example.com --name "Your Name"
+OWNER_EMAIL=you@example.com
+OWNER_PASSWORD=a-long-password   # at least 10 characters
+OWNER_NAME=Your Name             # optional
 ```
 
-`--name` can be left out (`pnpm owner:create --email you@example.com Your Name` works too). Keep `pnpm worker`
-running so the email is sent. Open it in Mailpit (http://localhost:8025), set a password, sign in at
-http://localhost:3000/admin with your email and password.
+When the web app starts and no account has that email, it creates an Owner with that password; sign in
+at http://localhost:3000/admin. An existing account is never changed from these settings, so you can
+remove the lines afterwards (change the password in the admin). The log says
+"Owner account created" once; a mistake in the settings is logged and the shop starts anyway.
+
+The old way still works: `pnpm owner:create --email you@example.com --name "Your Name"` emails a
+"set your password" link instead (needs `pnpm worker` running).
 
 | Command                     | What it does                                            |
 | --------------------------- | ------------------------------------------------------- |
@@ -301,6 +308,29 @@ http://localhost:3000/admin with your email and password.
 ## Progress log
 
 Newest first. Each entry: date · step · what changed · what is left / needed from you.
+
+### 2026-11-26 · Owner account from settings
+
+- The first Owner can now come from the settings file instead of a terminal command:
+  `OWNER_EMAIL`, `OWNER_PASSWORD` (at least 10 characters) and optionally `OWNER_NAME`, in
+  `.env.local` or the server's `.env.production`.
+- **How it works:** when the web app starts and no account has that email, it creates an active,
+  verified Owner with that password, ready to sign in at `/admin`. This is recorded in the audit log.
+- **What it never does:** an existing account is never changed (the password is not reset), so the
+  lines can stay or be removed after the first start. A mistake in the settings is logged in plain
+  words and the shop starts anyway. If the email already has an account, the log says so. The
+  password is never logged.
+- `pnpm owner:create` (the emailed "set your password" link) still works.
+- **Tested** with a production build and a temporary test owner:
+  - created on first start, and signing in worked;
+  - restarted with a different password: no second account, the original password still works;
+  - wrong settings: clear log messages and the shop still starts.
+  - The test account, its sessions, audit entries and failed-login counter were deleted afterwards.
+- On your Mac the old Owner account was deleted at your request, so the settings create it again
+  with the new password on the next start. For the live shop, Udoy adds the three lines to the
+  server's settings before the first start.
+- 3 new tests (356 total); lint, types, formatting and the production build pass. Committed and
+  pushed to main.
 
 ### 2026-11-23 · Storefront design round 1 — light shop, bigger cards, product menu, demo catalogue
 
