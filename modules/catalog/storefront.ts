@@ -127,7 +127,7 @@ const SORTS: Record<CardSort, Record<string, 1 | -1>> = {
 export async function getCardProducts({ sort = "newest", limit = 8 }: { sort?: CardSort; limit?: number } = {}) {
   "use cache";
   cacheLife("hours");
-  cacheTag(TAGS.catalog);
+  cacheTag(TAGS.catalog, TAGS.productLists);
   await connectMongoose();
   const docs = await Product.find({ status: "active" })
     .select(CARD_FIELDS)
@@ -323,7 +323,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetail | nu
 export async function getPrebuildSlugs(limit = 200): Promise<string[]> {
   "use cache";
   cacheLife("hours");
-  cacheTag(TAGS.catalog);
+  cacheTag(TAGS.catalog, TAGS.productLists);
   await connectMongoose();
   const docs = await Product.find({ status: "active" })
     .select("slug")

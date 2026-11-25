@@ -6,10 +6,11 @@ import { haveIBeenPwned } from "better-auth/plugins/haveibeenpwned";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { env, isProd } from "@/lib/env";
 import { mongoClient, mongoDb } from "@/lib/db/mongo";
-import { enqueueNotification } from "@/lib/queue";
+import { queueMessage } from "@/modules/notifications/send";
 import { isBdPhone, maskPhone, normalizeBdPhone } from "@/lib/phone";
 import { redis } from "@/lib/redis";
 import { tryWriteAudit } from "@/modules/audit/audit";
+import { removeCustomerData } from "@/modules/account/cleanup";
 import { clearFailures, isLocked, recordFailure } from "./lockout";
 import { hashPassword, verifyPassword } from "./password";
 import { isStaff } from "./rbac";
@@ -64,6 +65,24 @@ export const auth = betterAuth({
       permissions: { type: "string[]", required: false, defaultValue: [], input: false },
       status: { type: "string", required: false, defaultValue: "active", input: false },
     },
+    // Customers can delete their account (FR-AC-06): with their password, or within a day of signing in.
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        if (isStaff(user as { role?: string })) {
+          throw new APIError("FORBIDDEN", { message: "Staff accounts are removed by an owner in Admin → Staff." });
+        }
+        const removed = await removeCustomerData(user.id);
+        // The customer's email isn't kept: the entry only says an account went, and what went with it.
+        await tryWriteAudit({
+          actor: { id: user.id, email: "" },
+          action: "account.delete",
+          entity: "user",
+          entityId: user.id,
+          after: removed,
+        });
+      },
+    },
   },
   session: {
     modelName: "sessions",
@@ -85,13 +104,14 @@ export const auth = betterAuth({
     revokeSessionsOnPasswordReset: true,
     resetPasswordTokenExpiresIn: 60 * 60,
     sendResetPassword: async ({ user, url }) => {
-      await enqueueNotification({
-        kind: "email",
+      await queueMessage({
+        channel: "email",
         purpose: "password_reset",
         to: user.email,
         // Used for both password resets and staff invites.
         subject: `Set your ${e.STORE_NAME} password`,
         text: `Hi ${user.name},\n\nUse this link to set your password. It expires in 1 hour.\n\n${url}\n\nIf you did not expect this email, you can ignore it.`,
+        button: { label: "Set password", url },
       });
     },
   },
@@ -99,12 +119,13 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await enqueueNotification({
-        kind: "email",
+      await queueMessage({
+        channel: "email",
         purpose: "verify_email",
         to: user.email,
         subject: `Verify your email for ${e.STORE_NAME}`,
         text: `Hi ${user.name},\n\nConfirm your email address:\n\n${url}`,
+        button: { label: "Confirm email", url },
       });
     },
   },
@@ -206,16 +227,16 @@ export const auth = betterAuth({
       allowedAttempts: 5,
       phoneNumberValidator: (p) => isBdPhone(p),
       sendOTP: async ({ phoneNumber: to, code }) => {
-        await enqueueNotification({
-          kind: "sms",
+        await queueMessage({
+          channel: "sms",
           purpose: "otp",
           to,
           text: `${code} is your ${e.STORE_NAME} code. It expires in 5 minutes. Do not share it.`,
         });
       },
       sendPasswordResetOTP: async ({ phoneNumber: to, code }) => {
-        await enqueueNotification({
-          kind: "sms",
+        await queueMessage({
+          channel: "sms",
           purpose: "password_reset_otp",
           to,
           text: `${code} is your ${e.STORE_NAME} password reset code. It expires in 5 minutes.`,

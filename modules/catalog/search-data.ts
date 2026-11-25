@@ -24,7 +24,7 @@ async function getSearchIndex(): Promise<{
 }> {
   "use cache";
   cacheLife("hours");
-  cacheTag(TAGS.catalog, TAGS.navigation);
+  cacheTag(TAGS.catalog, TAGS.productLists, TAGS.navigation);
   await connectMongoose();
   const [docs, tree] = await Promise.all([
     Product.find({ status: "active" })
@@ -70,7 +70,7 @@ async function getSearchIndex(): Promise<{
 export async function searchProductIds(query: string): Promise<string[]> {
   "use cache";
   cacheLife("hours");
-  cacheTag(TAGS.catalog);
+  cacheTag(TAGS.catalog, TAGS.productLists);
   const q = cleanQuery(query);
   if (!q) return [];
   const { products } = await getSearchIndex();
@@ -87,7 +87,7 @@ export type SearchSuggestions = {
 export async function getSuggestions(query: string): Promise<SearchSuggestions> {
   "use cache";
   cacheLife("hours");
-  cacheTag(TAGS.catalog, TAGS.navigation);
+  cacheTag(TAGS.catalog, TAGS.productLists, TAGS.navigation);
   const q = cleanQuery(query);
   if (!q) return { query: q, products: [], categories: [] };
   const index = await getSearchIndex();

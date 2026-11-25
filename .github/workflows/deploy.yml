@@ -1,0 +1,74 @@
+name: Deploy
+
+# Every push to main that passes CI goes live on the server. Also runnable by hand from the Actions tab.
+# Until DEPLOY_HOST is set this does nothing. Secrets: DEPLOY_HOST (server IP), DEPLOY_SSH_KEY (private key
+# whose public half is in the server's authorized_keys as `command="<repo>/deploy/update.sh",restrict ...`),
+# DEPLOY_KNOWN_HOSTS (`ssh-keyscan -t ed25519 <ip>`), optional DEPLOY_USER / DEPLOY_PORT; variable SHOP_URL.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys queue up rather than overlap; a newer one never cancels a build that is half done.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Check the server is configured
+        id: ready
+        run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::notice::DEPLOY_HOST is not set, so nothing was deployed."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up SSH
+        if: steps.ready.outputs.go == 'true'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # The server's own key, pinned: the connection fails rather than talk to an impostor.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+
+      - name: Update the server
+        if: steps.ready.outputs.go == 'true'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        # The key may only run deploy/update.sh on the server (forced command in authorized_keys),
+        # so no command is sent here.
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" \
+            -o StrictHostKeyChecking=yes -o BatchMode=yes -o ServerAliveInterval=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST"
+
+      - name: Check the shop answers
+        if: steps.ready.outputs.go == 'true' && vars.SHOP_URL != ''
+        env:
+          SHOP_URL: ${{ vars.SHOP_URL }}
+        run: curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$SHOP_URL/api/health"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

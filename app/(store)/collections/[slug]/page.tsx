@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { getCollectionPage, getListingSlugs } from "@/modules/catalog/listing-data";
 import { SLUG_RE } from "@/modules/catalog/logic";
 import { breadcrumbJsonLd, jsonLdString } from "@/modules/catalog/seo";
+import { shareMeta } from "@/modules/seo/site";
 
 /**
  * Collection page (FR-SF-07): hand-picked or rule-based product sets ("Under ৳500", "Eid picks")
@@ -39,7 +40,7 @@ export async function generateMetadata({ params }: PageProps<"/collections/[slug
     title,
     description,
     alternates: { canonical: `/collections/${c.slug}` },
-    openGraph: { title, description, url: `/collections/${c.slug}`, ...(image ? { images: [{ url: image }] } : {}) },
+    ...shareMeta({ siteName: env().STORE_NAME, title, description, path: `/collections/${c.slug}`, image }),
   };
 }
 
@@ -54,7 +55,7 @@ export default async function CollectionPage({ params, searchParams }: PageProps
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-4 pb-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdString(breadcrumbJsonLd(crumbs, env().APP_URL)) }}

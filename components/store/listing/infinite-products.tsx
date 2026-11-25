@@ -65,7 +65,7 @@ export function InfiniteProducts({
 
   return (
     <>
-      <ProductGrid products={items} />
+      <ProductGrid products={items} className="xl:grid-cols-3" />
       <div ref={sentinel} className="mt-10 grid justify-items-center gap-3 text-center">
         <p className="text-muted-foreground text-sm" aria-live="polite">
           Showing {items.length.toLocaleString("en-IN")} of {Math.max(total, items.length).toLocaleString("en-IN")}

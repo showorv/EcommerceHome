@@ -62,6 +62,11 @@
 
 :root {
   --radius: 0.75rem;
+  /* Fonts come from lib/fonts.ts; the store theme can point these at other bundled fonts. */
+  --font-sans-latin: var(--ff-jakarta);
+  --font-heading: var(--font-sans-latin);
+  /* Bangla text (product names, SMS previews, invoices) falls back to Hind Siliguri. */
+  --font-bangla: var(--ff-hind);
 
   --background: oklch(0.99 0.003 85);
   --foreground: oklch(0.18 0.01 260);
@@ -143,6 +148,11 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading), var(--font-bangla), ui-sans-serif, system-ui, sans-serif;
+  }
   :lang(bn) {
     font-family: var(--font-bangla);
   }
@@ -157,5 +167,172 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Scroll motion (FR-SF-04, NFR-PF-02/03) ----------
+   Driven by the scroll position in CSS: no JavaScript, opacity and transform only, run off the main
+   thread and idle while off-screen. The store shell sets data-motion="full" | "reduced" | "off" from the
+   theme; shoppers who prefer less motion and browsers without scroll-driven animations get still pages
+   with everything visible. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Sections and product cards fade (and on "full" rise) in as they scroll into view. Cards in a row
+       start one after another (--reveal-i, set by StaggerItem). */
+    [data-motion="full"] .reveal,
+    [data-motion="reduced"] .reveal {
+      animation: reveal-in cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      /* Starts as the top edge comes in; done once the element is about a fifth of a screen in, whatever
+         its height. */
+      animation-range: entry calc(var(--reveal-i, 0) * 6%) cover calc(20% + var(--reveal-i, 0) * 3%);
+    }
+    /* Rows that scroll sideways (product rails): the cards follow the row's place on the page, because
+       view() would otherwise track the row's own sideways scrolling. */
+    [data-motion="full"] .reveal-group,
+    [data-motion="reduced"] .reveal-group {
+      view-timeline: --reveal-group block;
+    }
+    [data-motion="full"] .reveal-group .reveal-item,
+    [data-motion="reduced"] .reveal-group .reveal-item {
+      animation: reveal-in cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: --reveal-group;
+      animation-range: entry calc(var(--reveal-i, 0) * 6%) cover calc(20% + var(--reveal-i, 0) * 3%);
+    }
+    [data-motion="reduced"] .reveal,
+    [data-motion="reduced"] .reveal-item {
+      --reveal-y: 0px;
+    }
+
+    /* Hero parallax: the picture layer is 20% taller than the slide and drifts from -10% to +10% of the
+       slide's height while the slide crosses the screen, so it never shows an edge. */
+    [data-motion="full"] .parallax-scope {
+      view-timeline: --parallax block;
+    }
+    /* Hero text eases down and fades as the hero scrolls away, so it moves slower than the page (with or
+       without a picture). */
+    [data-motion="full"] .hero-scroll {
+      animation: hero-scroll-away linear both;
+      animation-timeline: --parallax;
+      animation-range: exit 0% exit 90%;
+    }
+    [data-motion="full"] .parallax {
+      top: -10%;
+      bottom: auto;
+      height: 120%;
+      animation: parallax-drift linear both;
+      animation-timeline: --parallax;
+      animation-range: cover 0% cover 100%;
+    }
+  }
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--reveal-y, 24px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hero-scroll-away {
+  to {
+    opacity: 0;
+    transform: translateY(30%);
+  }
+}
+
+/* Hero text rises in when the page opens, line by line. The main heading only moves (no fade), so the
+   largest text is painted at once and page speed (LCP) is not held back. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="full"] .hero-enter > * {
+    animation: hero-in 700ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: calc(var(--hero-i, 0) * 90ms);
+  }
+  [data-motion="full"] .hero-enter > :is(h1, h2) {
+    animation-name: hero-title-in;
+  }
+  [data-motion="reduced"] .hero-enter > :not(h1, h2) {
+    animation: page-fade-in 600ms ease-out both;
+    animation-delay: calc(var(--hero-i, 0) * 90ms);
+  }
+  .hero-enter > :nth-child(2) {
+    --hero-i: 1;
+  }
+  .hero-enter > :nth-child(3) {
+    --hero-i: 2;
+  }
+  .hero-enter > :nth-child(n + 4) {
+    --hero-i: 3;
+  }
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+@keyframes hero-title-in {
+  from {
+    transform: translateY(28px);
+  }
+}
+
+@keyframes parallax-drift {
+  from {
+    transform: translateY(-8.333%);
+  }
+  to {
+    transform: translateY(8.333%);
+  }
+}
+
+/* ---------- Page transitions (FR-SF-04) ----------
+   React <ViewTransition> in app/(store)/template.tsx: the old page fades out quickly, the new one fades
+   (and on "full" rises) in. The header and footer stay put. Browsers without the View Transitions API
+   simply switch pages. */
+::view-transition {
+  pointer-events: none; /* clicks during the short animation still reach the page */
+}
+::view-transition-old(.page-out) {
+  animation: 150ms ease-in both page-fade-out;
+}
+::view-transition-new(.page-in) {
+  animation: 340ms cubic-bezier(0.22, 0.61, 0.36, 1) 80ms both page-rise-in;
+}
+:root:has([data-motion="reduced"])::view-transition-new(.page-in) {
+  animation-name: page-fade-in;
+}
+:root:has([data-motion="off"])::view-transition-old(*),
+:root:has([data-motion="off"])::view-transition-new(*),
+:root:has([data-motion="off"])::view-transition-group(*) {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation: none !important;
+  }
+}
+
+@keyframes page-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes page-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
   }
 }

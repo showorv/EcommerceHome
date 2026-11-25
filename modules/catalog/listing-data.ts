@@ -220,7 +220,7 @@ const LIVE = { status: "active", deletedAt: null };
 function sourceTags(source: ListingSource): string[] {
   if (source.kind === "category") return [TAGS.catalog, TAGS.category(source.slug)];
   if (source.kind === "collection") return [TAGS.catalog, TAGS.collection(source.slug)];
-  return [TAGS.catalog];
+  return [TAGS.catalog, TAGS.productLists];
 }
 
 function sortFor(r: Resolved, q: ListingQuery): ListingSort {

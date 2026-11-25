@@ -94,7 +94,7 @@ export async function ListingSection({
   } else {
     products = (
       <>
-        <ProductGrid products={listing.products} />
+        <ProductGrid products={listing.products} className="xl:grid-cols-3" />
         <Pagination basePath={basePath} query={query} defaultSort={defaultSort} pages={listing.pages} />
       </>
     );
@@ -130,7 +130,7 @@ export function ListingSkeleton() {
       </div>
       <div className="grid content-start gap-6">
         <div className="bg-muted h-9 w-40 animate-pulse rounded" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3">
           {Array.from({ length: 8 }, (_, i) => (
             <div key={i} className="grid gap-2">
               <div className="bg-muted aspect-square animate-pulse rounded-lg" />
