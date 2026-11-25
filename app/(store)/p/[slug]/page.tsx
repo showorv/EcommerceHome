@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { TrackEvent } from "@/components/store/analytics/tracker";
 import { Breadcrumbs } from "@/components/store/breadcrumbs";
 import { ProductBlocks, SpecsTable } from "@/components/store/product-blocks";
 import { ProductDetail } from "@/components/store/product-detail";
 import { env } from "@/lib/env";
 import { SLUG_RE } from "@/modules/catalog/logic";
 import { breadcrumbJsonLd, jsonLdString, productJsonLd, productMetaDescription } from "@/modules/catalog/seo";
+import { shareMeta } from "@/modules/seo/site";
 import { getPrebuildSlugs, getProductDetail } from "@/modules/catalog/storefront";
 
 /**
@@ -39,13 +41,7 @@ export async function generateMetadata({ params }: PageProps<"/p/[slug]">): Prom
     title,
     description,
     alternates: { canonical: `/p/${p.slug}` },
-    openGraph: {
-      title,
-      description,
-      url: `/p/${p.slug}`,
-      ...(image ? { images: [{ url: image, alt: p.title.en }] } : {}),
-    },
-    twitter: { card: image ? "summary_large_image" : "summary", title, description },
+    ...shareMeta({ siteName: env().STORE_NAME, title, description, path: `/p/${p.slug}`, image, imageAlt: p.title.en }),
   };
 }
 
@@ -65,7 +61,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[slug]">) {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4 pb-28 md:pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-4 pb-28 md:pb-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(productJsonLd(p, base)) }} />
       <script
         type="application/ld+json"
@@ -73,6 +69,13 @@ export default async function ProductPage({ params }: PageProps<"/p/[slug]">) {
       />
 
       <Breadcrumbs crumbs={crumbs} />
+      <TrackEvent
+        event={{
+          name: "view_item",
+          value: Math.min(...p.variants.map((v) => v.price)),
+          items: [{ id: p.id, name: p.title.en, price: Math.min(...p.variants.map((v) => v.price)), qty: 1 }],
+        }}
+      />
 
       <ProductDetail product={p} />
 

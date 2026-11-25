@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh, updateTag } from "next/cache";
+import { refresh } from "next/cache";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { writeAudit } from "@/modules/audit/audit";
@@ -11,6 +11,7 @@ import { CatalogError, deleteCategory, saveCategory } from "./categories";
 import { deleteCollection, saveCollection } from "./collections";
 import { adjustStock, recordPurchaseBatch } from "./inventory";
 import { deleteProduct, duplicateProduct, saveProduct, setProductStatus, type ProductStatus } from "./products";
+import { productTags, refreshTags, scopeOfProducts } from "./store-refresh";
 import {
   adjustStockInput,
   categoryInput,
@@ -21,8 +22,8 @@ import {
 } from "./schemas";
 
 /**
- * Admin catalogue actions. Every action: permission check → zod validation → change →
- * audit log → cache tags updated so the storefront shows the change on the next visit (1.15).
+ * Admin catalogue actions. Every action: permission check → zod validation → change → audit log →
+ * on-demand revalidation of just the store pages the change affects (NFR-SC-02, see store-refresh.ts).
  */
 
 export type ActionResult<T = undefined> = { ok: true; message?: string; data?: T } | { ok: false; error: string };
@@ -54,10 +55,6 @@ async function run<T>(fn: () => Promise<ActionResult<T>>): Promise<ActionResult<
   }
 }
 
-function touch(...tags: string[]) {
-  for (const t of new Set([TAGS.catalog, ...tags])) updateTag(t);
-}
-
 // ---------- Categories ----------
 
 export async function saveCategoryAction(id: string | null, raw: unknown): Promise<ActionResult<{ id: string }>> {
@@ -77,7 +74,8 @@ export async function saveCategoryAction(id: string | null, raw: unknown): Promi
       after,
       ...g.meta,
     });
-    touch(TAGS.category(after.slug), ...(before ? [TAGS.category(before.slug)] : []), TAGS.navigation);
+    // The tree feeds menus, breadcrumbs, filters and which products a parent page lists: navigation.
+    refreshTags([TAGS.category(after.slug), ...(before ? [TAGS.category(before.slug)] : []), TAGS.navigation]);
     refresh();
     return { ok: true, message: "Category saved.", data: { id: after.id } };
   });
@@ -97,7 +95,7 @@ export async function deleteCategoryAction(id: string): Promise<ActionResult> {
       before,
       ...g.meta,
     });
-    touch(TAGS.category(before.slug), TAGS.navigation);
+    refreshTags([TAGS.category(before.slug), TAGS.navigation]);
     refresh();
     return { ok: true, message: "Category deleted." };
   });
@@ -122,7 +120,7 @@ export async function saveCollectionAction(id: string | null, raw: unknown): Pro
       after,
       ...g.meta,
     });
-    touch(TAGS.collection(after.slug), ...(before ? [TAGS.collection(before.slug)] : []));
+    refreshTags([TAGS.collection(after.slug), ...(before ? [TAGS.collection(before.slug)] : []), TAGS.navigation]);
     refresh();
     return { ok: true, message: "Collection saved.", data: { id: after.id } };
   });
@@ -142,7 +140,7 @@ export async function deleteCollectionAction(id: string): Promise<ActionResult> 
       before,
       ...g.meta,
     });
-    touch(TAGS.collection(before.slug));
+    refreshTags([TAGS.collection(before.slug), TAGS.navigation]);
     refresh();
     return { ok: true, message: "Collection deleted." };
   });
@@ -167,7 +165,9 @@ export async function saveProductAction(id: string | null, raw: unknown): Promis
       after: auditView(after),
       ...g.meta,
     });
-    touch(TAGS.product(after.slug), ...(before ? [TAGS.product(before.slug)] : []));
+    const scope = [{ id: after.id, slug: after.slug, categoryIds: after.categoryIds }];
+    if (before) scope.push({ id: after.id, slug: before.slug, categoryIds: before.categoryIds });
+    refreshTags(await productTags(scope));
     refresh();
     return { ok: true, message: "Product saved.", data: { id: after.id } };
   });
@@ -226,7 +226,7 @@ export async function setProductStatusAction(id: string, status: ProductStatus):
       after: { status },
       ...g.meta,
     });
-    touch(TAGS.product(res.slug));
+    refreshTags(await productTags(await scopeOfProducts([id])));
     refresh();
     return { ok: true, message: `Product is now ${status}.` };
   });
@@ -237,6 +237,8 @@ export async function deleteProductAction(id: string): Promise<ActionResult> {
   if ("error" in g) return { ok: false, error: g.error };
   if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid id." };
   return run(async () => {
+    // Read its categories first: they are what the deleted product's pages were listed on.
+    const scope = await scopeOfProducts([id]);
     const { slug } = await deleteProduct(id);
     await writeAudit({
       actor: actor(g),
@@ -246,7 +248,7 @@ export async function deleteProductAction(id: string): Promise<ActionResult> {
       before: { slug },
       ...g.meta,
     });
-    touch(TAGS.product(slug));
+    refreshTags(await productTags(scope));
     refresh();
     return { ok: true, message: "Product deleted." };
   });
@@ -270,7 +272,8 @@ export async function adjustStockAction(raw: unknown): Promise<ActionResult> {
       after: { stock: res.stockAfter, reason: parsed.data.reason, note: parsed.data.note },
       ...g.meta,
     });
-    if (res.slug) touch(TAGS.product(res.slug));
+    // Stock shows on the product page and as "sold out" on its cards.
+    refreshTags(await productTags(await scopeOfProducts([res.productId])));
     refresh();
     return { ok: true, message: `${res.sku}: stock is now ${res.stockAfter}.` };
   });
@@ -296,7 +299,7 @@ export async function recordPurchaseBatchAction(raw: unknown): Promise<ActionRes
       },
       ...g.meta,
     });
-    touch(...res.slugs.map(TAGS.product));
+    refreshTags(await productTags(await scopeOfProducts(res.productIds)));
     refresh();
     return { ok: true, message: `Batch ${res.batchNo} received.`, data: { batchNo: res.batchNo } };
   });

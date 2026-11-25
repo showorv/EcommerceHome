@@ -20,12 +20,15 @@ export function Field({
   label,
   htmlFor,
   hint,
+  error,
   className,
   children,
 }: {
   label: string;
   htmlFor?: string;
   hint?: ReactNode;
+  /** A problem with this field, shown in place of the hint. */
+  error?: string;
   className?: string;
   children: ReactNode;
 }) {
@@ -33,7 +36,13 @@ export function Field({
     <div className={cn("grid gap-1.5", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      {error ? (
+        <p className="text-destructive text-xs" role="alert">
+          {error}
+        </p>
+      ) : (
+        hint && <p className="text-muted-foreground text-xs">{hint}</p>
+      )}
     </div>
   );
 }

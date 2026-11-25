@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { tryWriteAudit } from "@/modules/audit/audit";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { checkUpload, MEDIA_LIMITS, sniffMime, type MediaKind } from "@/modules/media/upload-policy";
@@ -24,6 +26,9 @@ const EXT: Record<string, string> = {
 
 export async function POST(request: Request) {
   if (process.env.NODE_ENV === "production") return new NextResponse(null, { status: 404 });
+  if (!isSameOriginRequest(request.headers, env().APP_URL)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const guard = await checkStaff("media.upload");
   if (!guard.ok) return NextResponse.json({ error: "Forbidden" }, { status: guard.status });

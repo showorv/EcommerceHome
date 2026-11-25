@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export type NavItem = { href: string; label: string };
+export type NavItem = { href: string; label: string; badge?: number };
 
 export function AdminNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
@@ -25,6 +25,13 @@ export function AdminNav({ items }: { items: NavItem[] }) {
             )}
           >
             {item.label}
+            {item.badge ? (
+              <span className="ml-2 rounded-full bg-amber-500/15 px-1.5 text-xs text-amber-700 tabular-nums dark:text-amber-300">
+                <span className="sr-only">, </span>
+                {item.badge}
+                <span className="sr-only"> waiting</span>
+              </span>
+            ) : null}
           </Link>
         );
       })}

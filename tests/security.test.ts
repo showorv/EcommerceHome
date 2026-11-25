@@ -63,6 +63,12 @@ describe("Content-Security-Policy", () => {
     expect(csp).toContain("form-action 'self'");
     expect(csp).not.toContain("unsafe-eval");
   });
+
+  it("lets only our own admin frame the builder's draft preview", () => {
+    expect(storefrontCsp(false, true, true)).toContain("frame-ancestors 'self'");
+    expect(storefrontCsp(false, true, true)).not.toContain("frame-ancestors 'none'");
+    expect(adminCsp("n", false)).toContain("frame-src 'self'");
+  });
 });
 
 describe("upload policy", () => {

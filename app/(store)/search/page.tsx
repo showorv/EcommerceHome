@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function SearchPage({ searchParams }: PageProps<"/search">) {
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-6 pb-16">
+    <div className="mx-auto max-w-7xl px-4 pt-6 pb-16">
       <Suspense
         fallback={
           <>
