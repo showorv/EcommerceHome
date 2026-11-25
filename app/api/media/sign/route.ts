@@ -1,8 +1,10 @@
 import { v2 as cloudinary } from "cloudinary";
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { checkStaff, requestMeta } from "@/modules/auth/session";
 import { tryWriteAudit } from "@/modules/audit/audit";
+import { storageSettings } from "@/modules/integrations/store";
 import { checkUpload, uploadRequestSchema } from "@/modules/media/upload-policy";
 
 /**
@@ -10,13 +12,14 @@ import { checkUpload, uploadRequestSchema } from "@/modules/media/upload-policy"
  * The browser uploads directly to Cloudinary with these parameters.
  */
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request.headers, env().APP_URL)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const guard = await checkStaff("media.upload");
   if (!guard.ok) return NextResponse.json({ error: "Forbidden" }, { status: guard.status });
 
-  const e = env();
-  if (!e.CLOUDINARY_CLOUD_NAME || !e.CLOUDINARY_API_KEY || !e.CLOUDINARY_API_SECRET) {
-    return NextResponse.json({ error: "Media storage is not configured" }, { status: 503 });
-  }
+  const c = (await storageSettings()).cloudinary;
+  if (!c) return NextResponse.json({ error: "Media storage is not configured" }, { status: 503 });
 
   const parsed = uploadRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -32,7 +35,7 @@ export async function POST(request: Request) {
     ...(parsed.data.kind === "image" ? { allowed_formats: "jpg,jpeg,png,webp,avif,gif" } : {}),
     ...(parsed.data.kind === "video" ? { allowed_formats: "mp4,webm,mov" } : {}),
   };
-  const signature = cloudinary.utils.api_sign_request(params, e.CLOUDINARY_API_SECRET);
+  const signature = cloudinary.utils.api_sign_request(params, c.apiSecret);
 
   const meta = await requestMeta();
   await tryWriteAudit({
@@ -44,8 +47,8 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
-    uploadUrl: `https://api.cloudinary.com/v1_1/${e.CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
-    apiKey: e.CLOUDINARY_API_KEY,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${c.cloudName}/${resourceType}/upload`,
+    apiKey: c.apiKey,
     params,
     signature,
     maxBytes: parsed.data.bytes,

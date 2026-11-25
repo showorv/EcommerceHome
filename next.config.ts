@@ -34,6 +34,14 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: base },
       // Admin gets its own nonce-based CSP from proxy.ts.
       { source: "/((?!admin).*)", headers: [{ key: "Content-Security-Policy", value: storefrontCsp(isDev, isHttps) }] },
+      // The storefront builder shows the draft preview in a frame on our own admin pages.
+      {
+        source: "/preview/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: storefrontCsp(isDev, isHttps, true) },
+        ],
+      },
     ];
   },
 };

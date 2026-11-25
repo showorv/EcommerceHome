@@ -1,20 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import { Hind_Siliguri, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { FONT_VARIABLES } from "@/lib/fonts";
+import { searchIndexing, shareMeta } from "@/modules/seo/site";
 import "./globals.css";
 
-const sans = Plus_Jakarta_Sans({ variable: "--font-sans-latin", subsets: ["latin"], display: "swap" });
-// Bangla text (product names, SMS previews, invoices) falls back to Hind Siliguri.
-const bangla = Hind_Siliguri({
-  variable: "--font-bangla",
-  subsets: ["bengali"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
+const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
+const STORE_NAME = process.env.STORE_NAME ?? "Store";
+const DESCRIPTION = "Kitchen, home and lifestyle gadgets imported from China, delivered across Bangladesh.";
 
 export const metadata: Metadata = {
-  title: { default: process.env.STORE_NAME ?? "Store", template: `%s · ${process.env.STORE_NAME ?? "Store"}` },
-  description: "Kitchen, home and lifestyle gadgets imported from China, delivered across Bangladesh.",
+  // Makes relative image/page URLs absolute in share previews (Open Graph) and canonical links.
+  metadataBase: new URL(APP_URL),
+  title: { default: STORE_NAME, template: `%s · ${STORE_NAME}` },
+  description: DESCRIPTION,
+  // Staging and local copies stay out of search engines (see robots.ts).
+  ...(searchIndexing(process.env.SEARCH_INDEXING, APP_URL) ? {} : { robots: { index: false, follow: false } }),
+  ...shareMeta({ siteName: STORE_NAME, title: STORE_NAME, description: DESCRIPTION }),
 };
 
 export const viewport: Viewport = {
@@ -26,7 +27,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${bangla.variable} h-full antialiased`}>
+    <html lang="en" className={`${FONT_VARIABLES} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         {children}
         <Toaster position="top-center" />

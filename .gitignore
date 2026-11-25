@@ -42,3 +42,13 @@ next-env.d.ts
 
 # allow the template
 !.env.example
+
+# development uploads (production uses Cloudinary)
+/public/uploads/
+
+# load test (scripts/load): test numbers and tokens
+/.loadtest/
+
+# production settings and keys (deploy/)
+/deploy/.env.production
+/deploy/secrets/

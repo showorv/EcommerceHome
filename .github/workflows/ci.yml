@@ -36,6 +36,15 @@ jobs:
         run: pnpm typecheck
       - name: Unit tests
         run: pnpm test
+      - name: Start MongoDB (single-node replica set)
+        # Storefront pages read the catalogue while prerendering, so the build needs a database (empty is fine).
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:8.0 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }" && break
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval "rs.status().ok"
       - name: Build
         run: pnpm build
 

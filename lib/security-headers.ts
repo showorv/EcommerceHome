@@ -9,26 +9,55 @@
 const MEDIA_HOSTS = ["https://res.cloudinary.com"];
 const GOOGLE_AVATARS = ["https://lh3.googleusercontent.com"];
 
+/**
+ * Marketing pixels (FR-AD-13): Meta, Google Analytics 4 and TikTok. They only load when their IDs are
+ * saved in Admin → Integrations, but the policy is fixed at build time, so their hosts are always listed.
+ */
+const PIXEL_SCRIPTS = [
+  "https://connect.facebook.net",
+  "https://www.googletagmanager.com",
+  "https://analytics.tiktok.com",
+];
+const PIXEL_CONNECT = [
+  "https://www.facebook.com",
+  "https://connect.facebook.net",
+  "https://*.google-analytics.com",
+  "https://*.analytics.google.com",
+  "https://www.googletagmanager.com",
+  "https://analytics.tiktok.com",
+  "https://*.tiktok.com",
+  "https://*.tiktokw.us",
+];
+/** Error reports from the browser (Sentry, NFR-AV-03). */
+const ERROR_REPORTS = ["https://*.sentry.io"];
+const PIXEL_IMAGES = [
+  "https://www.facebook.com",
+  "https://*.google-analytics.com",
+  "https://www.googletagmanager.com",
+  "https://analytics.tiktok.com",
+];
+
 function join(directives: Record<string, string[]>): string {
   return Object.entries(directives)
     .map(([k, v]) => (v.length ? `${k} ${v.join(" ")}` : k))
     .join("; ");
 }
 
-export function storefrontCsp(isDev: boolean, https = !isDev): string {
+/** `framedBySelf`: the builder's draft preview, shown in a frame inside the admin. */
+export function storefrontCsp(isDev: boolean, https = !isDev, framedBySelf = false): string {
   return join({
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", ...(isDev ? ["'unsafe-eval'"] : [])],
+    "script-src": ["'self'", "'unsafe-inline'", ...PIXEL_SCRIPTS, ...(isDev ? ["'unsafe-eval'"] : [])],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS],
+    "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS, ...PIXEL_IMAGES],
     "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
     "font-src": ["'self'"],
-    "connect-src": ["'self'", ...(isDev ? ["ws:"] : [])],
+    "connect-src": ["'self'", ...PIXEL_CONNECT, ...ERROR_REPORTS, ...(isDev ? ["ws:"] : [])],
     "frame-src": ["https://www.youtube-nocookie.com", "https://www.youtube.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
-    "frame-ancestors": ["'none'"],
+    "frame-ancestors": [framedBySelf ? "'self'" : "'none'"],
     ...(https ? { "upgrade-insecure-requests": [] } : {}),
   });
 }
@@ -42,8 +71,8 @@ export function adminCsp(nonce: string, isDev: boolean, https = !isDev): string 
     "img-src": ["'self'", "data:", "blob:", ...MEDIA_HOSTS, ...GOOGLE_AVATARS],
     "media-src": ["'self'", "blob:", ...MEDIA_HOSTS],
     "font-src": ["'self'"],
-    "connect-src": ["'self'", "https://api.cloudinary.com", ...(isDev ? ["ws:"] : [])],
-    "frame-src": ["'none'"],
+    "connect-src": ["'self'", "https://api.cloudinary.com", ...ERROR_REPORTS, ...(isDev ? ["ws:"] : [])],
+    "frame-src": ["'self'"], // the storefront builder's draft preview
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

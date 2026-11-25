@@ -131,6 +131,10 @@ describe("admin route permissions", () => {
     expect(requiredPermission("/admin")).toBeNull();
     expect(requiredPermission("/admin/staff")).toBe("staff.manage");
     expect(requiredPermission("/admin/staff/123")).toBe("staff.manage");
+    expect(requiredPermission("/admin/storefront")).toBe("cms.edit");
+    expect(requiredPermission("/admin/appearance")).toBe("cms.edit");
+    expect(requiredPermission("/admin/pages/new")).toBe("cms.edit");
+    expect(requiredPermission("/admin/messages")).toBe("customers.view");
     expect(requiredPermission("/admin/staffing")).toBeNull();
     expect(requiredPermission("/admin/audit")).toBe("audit.view");
     expect(isPublicAdminPath("/admin/sign-in")).toBe(true);

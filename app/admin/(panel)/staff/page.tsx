@@ -3,6 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireStaff } from "@/modules/auth/session";
 import { listStaff } from "@/modules/staff/staff";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 export default async function StaffPage() {
   const { user } = await requireStaff("staff.manage");
   const rows = await listStaff();

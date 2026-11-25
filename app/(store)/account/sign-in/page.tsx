@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { CustomerSignInForm } from "@/components/auth/customer-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -12,7 +13,10 @@ export default function SignInPage() {
           <CardTitle>Sign in</CardTitle>
         </CardHeader>
         <CardContent>
-          <CustomerSignInForm googleEnabled={googleEnabled} />
+          {/* Reads ?next= in the browser, so the page itself stays static. */}
+          <Suspense fallback={null}>
+            <CustomerSignInForm googleEnabled={googleEnabled} />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

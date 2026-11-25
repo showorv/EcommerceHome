@@ -6,10 +6,12 @@
  */
 export const PERMISSIONS = [
   "orders.view",
+  "orders.create",
   "orders.update",
   "orders.confirm",
   "orders.cancel",
   "orders.export",
+  "orders.refund",
   "customers.view",
   "customers.block",
   "products.view",
@@ -38,6 +40,7 @@ export const STAFF_ROLES: readonly Role[] = ["staff", "manager", "owner"];
 
 const STAFF: Permission[] = [
   "orders.view",
+  "orders.create",
   "orders.update",
   "orders.confirm",
   "orders.cancel",
@@ -48,6 +51,7 @@ const STAFF: Permission[] = [
 const MANAGER: Permission[] = [
   ...STAFF,
   "orders.export",
+  "orders.refund",
   "customers.block",
   "products.edit",
   "products.delete",

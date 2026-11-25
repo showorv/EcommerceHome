@@ -6,6 +6,9 @@ import { getQueue, QUEUE_NAMES } from "@/lib/queue";
 import { redis } from "@/lib/redis";
 import { requireStaff } from "@/modules/auth/session";
 
+// Checks the signed-in staff member on every request (see app/admin/layout.tsx).
+export const instant = false;
+
 /** Health of the database, cache and job queues, plus the dead-letter list (NFR-SC-05). */
 export default async function SystemPage() {
   await requireStaff("system.view");

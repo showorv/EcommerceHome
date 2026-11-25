@@ -3,10 +3,29 @@ import { SignOutButton } from "@/components/admin/sign-out-button";
 import { Badge } from "@/components/ui/badge";
 import { requiredPermission } from "@/modules/auth/admin-routes";
 import { requireStaff } from "@/modules/auth/session";
+import { pendingOrderCount } from "@/modules/orders/admin-data";
 
-/** Menu items appear only when the user has the permission; proxy.ts and the pages check again. */
+/** Menu items appear only when the user has the permission (admin-routes.ts); proxy.ts and the pages check again. */
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/collections", label: "Collections" },
+  { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/storefront", label: "Storefront" },
+  { href: "/admin/appearance", label: "Menus & theme" },
+  { href: "/admin/pages", label: "Pages" },
+  { href: "/admin/coupons", label: "Coupons" },
+  { href: "/admin/delivery", label: "Delivery" },
+  { href: "/admin/payments", label: "Payments" },
+  { href: "/admin/invoices", label: "Invoices" },
+  { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/order-rules", label: "Order rules" },
+  { href: "/admin/blocked-numbers", label: "Blocked numbers" },
+  { href: "/admin/messages", label: "Messages" },
+  { href: "/admin/integrations", label: "Integrations" },
   { href: "/admin/staff", label: "Staff & roles" },
   { href: "/admin/audit", label: "Audit log" },
   { href: "/admin/system", label: "Jobs & system" },
@@ -14,10 +33,12 @@ const NAV: NavItem[] = [
 
 export default async function AdminPanelLayout({ children }: LayoutProps<"/admin">) {
   const { user, permissions } = await requireStaff();
+  // Orders waiting for a call, shown on the Orders item (SRS §2.4).
+  const waiting = permissions.has("orders.view") ? await pendingOrderCount() : 0;
   const items = NAV.filter((n) => {
     const p = requiredPermission(n.href);
     return !p || permissions.has(p);
-  });
+  }).map((n) => (n.href === "/admin/orders" && waiting > 0 ? { ...n, badge: waiting } : n));
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">

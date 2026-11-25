@@ -1,69 +1,49 @@
-import { Lift, Reveal, Stagger, StaggerItem } from "@/components/motion/primitives";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
+import { Sections } from "@/components/storefront-sections/sections";
+import { env } from "@/lib/env";
+import { jsonLdString } from "@/modules/catalog/seo";
+import { organizationJsonLd, shareMeta, websiteJsonLd } from "@/modules/seo/site";
+import { getLiveDesign } from "@/modules/storefront/design-data";
+import { getLiveSections } from "@/modules/storefront/pages";
+
+const DESCRIPTION = "Kitchen, home and lifestyle gadgets imported from China, delivered across Bangladesh.";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { STORE_NAME } = env();
+  const { navigation } = await getLiveDesign();
+  const description = navigation.footer.about.trim().slice(0, 160) || DESCRIPTION;
+  return {
+    description,
+    alternates: { canonical: "/" },
+    ...shareMeta({ siteName: STORE_NAME, title: STORE_NAME, description, path: "/" }),
+  };
+}
 
 /**
- * Temporary home page that shows the design system and motion primitives.
- * Phase 1 replaces it with sections managed from the admin storefront builder (FR-SF-01).
+ * Home page, built from sections in the admin storefront builder (FR-SF-01, FR-AD-07). Before the
+ * first publish it shows a built-in starter layout. Carries the shop's Organization and WebSite
+ * structured data (NFR-UX-01).
  */
-const SAMPLE = [
-  { name: "Electric milk frother", price: "৳650", was: "৳900", label: "Hot" },
-  { name: "Silicone spatula set", price: "৳480", was: "৳600", label: "New" },
-  { name: "Mini vacuum sealer", price: "৳1,250", was: "৳1,600", label: "Bestseller" },
-  { name: "LED motion sensor light", price: "৳390", was: "৳550", label: "New" },
-];
-
-export default function HomePage() {
+export default async function HomePage() {
+  const [sections, design] = await Promise.all([getLiveSections("home"), getLiveDesign()]);
+  const { APP_URL, STORE_NAME } = env();
+  const footer = design.navigation.footer;
+  const org = organizationJsonLd({
+    name: STORE_NAME,
+    base: APP_URL,
+    logo: design.theme.logo.url || null,
+    phone: footer.phone,
+    email: footer.email,
+    sameAs: footer.social.map((s) => s.url).filter((u) => /^https?:\/\//.test(u)),
+  });
   return (
     <>
-      <section className="relative overflow-hidden">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-20 md:py-28">
-          <Reveal>
-            <Badge variant="secondary" className="mb-4">
-              Imported from China · Delivered across Bangladesh
-            </Badge>
-            <h1 className="max-w-2xl text-4xl font-extrabold tracking-tight text-balance md:text-6xl">
-              Smart gadgets for your <span className="text-brand">kitchen</span> and home.
-            </h1>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p className="text-muted-foreground max-w-xl text-lg">
-              Cash on delivery all over the country. Phase 0 preview — the real home page is built from admin sections
-              in Phase 1.
-            </p>
-          </Reveal>
-          <Reveal delay={0.2} className="flex gap-3">
-            <Button size="lg" className="bg-brand text-brand-foreground hover:bg-brand/90">
-              Shop now
-            </Button>
-            <Button size="lg" variant="outline">
-              Track order
-            </Button>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 pb-24">
-        <Reveal>
-          <h2 className="mb-6 text-2xl font-bold tracking-tight">Design system preview</h2>
-        </Reveal>
-        <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {SAMPLE.map((p) => (
-            <StaggerItem key={p.name}>
-              <Lift className="group bg-card rounded-xl border p-3 shadow-sm transition-shadow hover:shadow-xl">
-                <div className="from-accent to-secondary relative mb-3 aspect-square rounded-lg bg-gradient-to-br">
-                  <Badge className="bg-brand text-brand-foreground absolute top-2 left-2">{p.label}</Badge>
-                </div>
-                <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
-                <p className="mt-1 text-sm">
-                  <span className="font-bold">{p.price}</span>{" "}
-                  <span className="text-muted-foreground line-through">{p.was}</span>
-                </p>
-              </Lift>
-            </StaggerItem>
-          ))}
-        </Stagger>
-      </section>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(org) }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdString(websiteJsonLd(STORE_NAME, APP_URL)) }}
+      />
+      <Sections sections={sections} />
     </>
   );
 }

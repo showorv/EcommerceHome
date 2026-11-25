@@ -1,0 +1,16 @@
+# Never sent to the Docker build: secrets, local data, build output and tooling.
+.env*
+!.env.example
+node_modules
+.next
+.git
+.github
+.claude
+.loadtest
+coverage
+public/uploads
+deploy/.env*
+deploy/secrets
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
